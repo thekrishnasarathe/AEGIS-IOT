@@ -1,0 +1,179 @@
+/* filepath: frontend/src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0A0D14;
+    background-image: 
+      radial-gradient(at 15% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+      radial-gradient(at 85% 0%, rgba(14, 165, 233, 0.10) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 70%);
+    background-attachment: fixed;
+    color: #F1F5F9;
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Smooth Dark Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+/* AEGIS-IoT Sleek Card System */
+.aegis-card {
+  background: rgba(18, 24, 38, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.35), 0 0 1px 1px rgba(255, 255, 255, 0.04);
+}
+
+.aegis-card-header {
+  background: rgba(22, 31, 50, 0.8);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  border-top-left-radius: 0.95rem;
+  border-top-right-radius: 0.95rem;
+}
+
+/* Diff Styling */
+.diff-add-row {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #6EE7B7;
+  border-left: 3px solid #10B981;
+}
+
+.diff-del-row {
+  background-color: rgba(244, 63, 94, 0.12);
+  color: #FDA4AF;
+  border-left: 3px solid #F43F5E;
+}
+
+.diff-hunk-row {
+  background-color: rgba(30, 41, 59, 0.5);
+  color: #94A3B8;
+}
+
+/* Minecraft & Lego Voxel Design System */
+.font-pixel {
+  font-family: 'Press Start 2P', monospace;
+}
+
+.font-vt {
+  font-family: 'VT323', monospace;
+}
+
+/* 3D Isometric Voxel Block with Crisp 2px Pixel Borders and Bevel Shadows */
+.voxel-block {
+  position: relative;
+  border: 2px solid #000000;
+  box-shadow: inset 3px 3px 0px rgba(255, 255, 255, 0.28),
+              inset -3px -3px 0px rgba(0, 0, 0, 0.65),
+              0 6px 0 #000000,
+              0 8px 16px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.voxel-block:hover {
+  filter: brightness(1.05);
+}
+
+.voxel-block:active,
+.voxel-btn:active {
+  transform: translateY(4px);
+  box-shadow: inset 3px 3px 0px rgba(255, 255, 255, 0.28),
+              inset -3px -3px 0px rgba(0, 0, 0, 0.65),
+              0 2px 0 #000000,
+              0 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.voxel-card {
+  position: relative;
+  border: 2px solid #000000;
+  background: #0D1117;
+  box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.2),
+              inset -2px -2px 0px rgba(0, 0, 0, 0.6),
+              0 6px 0 #000000,
+              0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* 3D Lego Top Stud Pattern */
+.lego-studs {
+  position: relative;
+}
+
+.lego-studs::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 10px;
+  right: 10px;
+  height: 6px;
+  background-image: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.55) 20%, #1A1A1A 90%);
+  background-size: 20px 6px;
+  background-repeat: repeat-x;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+  z-index: 10;
+}
+
+/* Authentic Minecraft / Lego Material Palettes */
+.mat-emerald {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: #FFFFFF;
+}
+
+.mat-redstone {
+  background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%);
+  color: #FFFFFF;
+}
+
+.mat-glowstone {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  color: #000000;
+}
+
+.mat-diamond {
+  background: linear-gradient(135deg, #38BDF8 0%, #0284C7 100%);
+  color: #FFFFFF;
+}
+
+.mat-obsidian {
+  background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+  color: #94A3B8;
+}
+
+/* Backwards-compatible aliases */
+.gh-card,
+.studio-card,
+.obsidian-card,
+.glass-panel {
+  background: rgba(18, 24, 38, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.35);
+}
+
+.gh-card-header {
+  background: rgba(22, 31, 50, 0.8);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  border-top-left-radius: 0.95rem;
+  border-top-right-radius: 0.95rem;
+}

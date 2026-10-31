@@ -1,0 +1,214 @@
+{
+  "model_type": "Multinomial_Softmax_AST_Classifier_v2",
+  "classes": [
+    "CWE-121",
+    "CWE-122",
+    "CWE-476",
+    "CWE-416",
+    "SAFE"
+  ],
+  "feature_names": [
+    "has_stack_array",
+    "has_heap_alloc",
+    "has_unbounded_str_copy",
+    "has_raw_memcpy_memmove",
+    "has_nullable_str_search",
+    "has_missing_null_check",
+    "has_free_call",
+    "has_use_after_free_pattern",
+    "has_bounds_guard_sizeof_strnlen",
+    "has_snprintf_safe_format",
+    "has_pointer_offset_deref",
+    "has_null_reset_after_free"
+  ],
+  "num_samples": 100,
+  "train_accuracy": 0.99,
+  "loocv_accuracy": 0.97,
+  "dataset_metadata": {
+    "sources": [
+      {
+        "name": "NIST Juliet Test Suite v1.3",
+        "role": "Synthetic C vulnerability baseline (CWE121, CWE122, CWE476, CWE416, goodG2B)"
+      },
+      {
+        "name": "CVEfixes v1.0.7",
+        "role": "Real-world CVE commit pairs with security patches for C/C++"
+      },
+      {
+        "name": "Big-Vul 2020",
+        "role": "Curated vulnerability database from 348 GitHub open-source C/C++ projects"
+      },
+      {
+        "name": "Devign v1",
+        "role": "Graph neural network vulnerability dataset for QEMU & FFmpeg"
+      },
+      {
+        "name": "REVEAL 2021",
+        "role": "Chromium and Linux kernel vulnerability benchmarks"
+      },
+      {
+        "name": "IoTVulBench 2023",
+        "role": "Firmware and IoT protocol benchmark (MQTT, CoAP, BLE, Zigbee, UART)"
+      }
+    ],
+    "sample_count": 100,
+    "classes_count": 5,
+    "features_count": 12
+  },
+  "confusion_matrix": [
+    [
+      20,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      19,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      18,
+      0,
+      2
+    ],
+    [
+      0,
+      0,
+      0,
+      20,
+      0
+    ],
+    [
+      0,
+      0,
+      2,
+      0,
+      18
+    ]
+  ],
+  "loss_history": [
+    {
+      "epoch": 0,
+      "loss": 1.60944
+    },
+    {
+      "epoch": 400,
+      "loss": 0.12247
+    },
+    {
+      "epoch": 800,
+      "loss": 0.1107
+    },
+    {
+      "epoch": 1200,
+      "loss": 0.10781
+    },
+    {
+      "epoch": 1600,
+      "loss": 0.10676
+    },
+    {
+      "epoch": 1999,
+      "loss": 0.10629
+    }
+  ],
+  "W": [
+    [
+      3.6425671940805597,
+      -1.3167852030203768,
+      -1.1007088043356925,
+      -0.3392683812864621,
+      -0.8858048054380168
+    ],
+    [
+      -1.4899219501846686,
+      3.3678931438593893,
+      -1.6125912425621773,
+      0.8498174160530333,
+      -1.11519736716558
+    ],
+    [
+      1.6805180075411743,
+      1.723459689870247,
+      -0.9025481592306628,
+      0.007875191873239415,
+      -2.5093047300539957
+    ],
+    [
+      0.96665295916414,
+      1.2804642384097586,
+      -1.355898451406787,
+      -0.6747318257677463,
+      -0.21648692039936152
+    ],
+    [
+      -0.503021141513493,
+      -0.4185934165430365,
+      1.3745780127165141,
+      -0.3012517061737092,
+      -0.15171174848627622
+    ],
+    [
+      -0.41232205597346655,
+      -0.34173114680334893,
+      2.34030127404574,
+      -0.22388816307270892,
+      -1.3623599081962177
+    ],
+    [
+      -0.3443919894778485,
+      -2.0243501292808728,
+      -0.5756983650816455,
+      2.501624528300777,
+      0.44281595553959124
+    ],
+    [
+      -0.26571926891114245,
+      -1.4464326278475867,
+      -0.3740427160977007,
+      3.5296669032709937,
+      -1.4434722904145714
+    ],
+    [
+      -1.5234263053919646,
+      -1.5877241735815246,
+      -1.2093776760918662,
+      0.0857221876053334,
+      4.234805967460042
+    ],
+    [
+      -0.3283047160399032,
+      -0.4331996719651032,
+      -0.9395598947312741,
+      -0.34950035647582195,
+      2.050564639212103
+    ],
+    [
+      0.7366543181635757,
+      -0.2657558551505196,
+      -0.5061060248097836,
+      -0.7852932884738788,
+      0.8205008502706067
+    ],
+    [
+      -0.0786727205667074,
+      -0.5779175014332852,
+      -0.20165564898394606,
+      -1.0280423749702234,
+      1.886288245954163
+    ]
+  ],
+  "b": [
+    -1.187408090842728,
+    -0.547163225655538,
+    1.9252076524219899,
+    -1.2347204680791168,
+    1.0440841321553869
+  ]
+}
