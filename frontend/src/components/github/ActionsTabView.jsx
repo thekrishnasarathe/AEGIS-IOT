@@ -254,8 +254,8 @@ export default function ActionsTabView({
               {verdict === 'VERIFIED'
                 ? 'All 7 deterministic gates satisfied · Zero ASan crashes'
                 : verdict === 'REJECTED'
-                ? runState?.stage_6?.rejection_reason || 'Banned suppression token intercepted'
-                : 'Deterministic tools decide; models only propose.'}
+                  ? runState?.stage_6?.rejection_reason || 'Banned suppression token intercepted'
+                  : 'Deterministic tools decide; models only propose.'}
             </p>
           </div>
 
@@ -264,11 +264,10 @@ export default function ActionsTabView({
             <button
               onClick={onRunLadder}
               disabled={isRunning}
-              className={`w-full py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                isRunning
+              className={`w-full py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${isRunning
                   ? 'bg-cyan-700/80 text-white cursor-wait animate-pulse'
                   : 'bg-[#238636] hover:bg-[#2EA043] text-white active:scale-95 shadow-black/40'
-              }`}
+                }`}
             >
               {isRunning ? (
                 <>
@@ -294,11 +293,10 @@ export default function ActionsTabView({
                 Physical Arduino UNO (ATmega328P)
               </span>
               <span
-                className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold border ${
-                  hwState.mode === 'PHYSICAL_HARDWARE'
+                className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold border ${hwState.mode === 'PHYSICAL_HARDWARE'
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
                     : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                }`}
+                  }`}
               >
                 {hwState.mode === 'PHYSICAL_HARDWARE' ? 'COM ACTIVE' : 'DIGITAL TWIN'}
               </span>
@@ -320,11 +318,10 @@ export default function ActionsTabView({
                 {/* Red LED D8 */}
                 <div className="flex items-center gap-1.5">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full border ${
-                      hwState.led_on
+                    className={`w-2.5 h-2.5 rounded-full border ${hwState.led_on
                         ? 'bg-rose-500 border-white shadow-[0_0_8px_#F43F5E] animate-ping'
                         : 'bg-rose-950 border-rose-900'
-                    }`}
+                      }`}
                   />
                   <span className={hwState.led_on ? 'text-rose-400 font-bold' : 'text-slate-500'}>
                     LED: {hwState.led_on ? 'ON (THREAT)' : 'OFF'}
@@ -351,11 +348,10 @@ export default function ActionsTabView({
             <button
               onClick={handleFireAttack}
               disabled={isFiringAttack}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
-                isFiringAttack
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${isFiringAttack
                   ? 'bg-rose-700 text-white animate-pulse'
                   : 'bg-gradient-to-r from-rose-900/70 to-red-800/70 hover:from-rose-800 hover:to-red-700 text-rose-100 border border-rose-600/40 active:scale-95'
-              }`}
+                }`}
               title="Transmits 64 bytes ('A'*64) over serial to test the hardware buffer overflow guard"
             >
               <Flame className="w-3.5 h-3.5 text-rose-400" />
@@ -505,21 +501,19 @@ export default function ActionsTabView({
               <div className="flex items-center bg-[#21262D] rounded-lg p-0.5 border border-[#30363D] text-xs font-mono">
                 <button
                   onClick={() => setCodeViewMode('side-by-side')}
-                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                    codeViewMode === 'side-by-side'
+                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${codeViewMode === 'side-by-side'
                       ? 'bg-[#30363D] text-white font-bold'
                       : 'text-slate-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   Side-by-Side
                 </button>
                 <button
                   onClick={() => setCodeViewMode('diff')}
-                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                    codeViewMode === 'diff'
+                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${codeViewMode === 'diff'
                       ? 'bg-[#30363D] text-white font-bold'
                       : 'text-slate-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   Unified Diff
                 </button>
@@ -581,10 +575,10 @@ export default function ActionsTabView({
                       line.startsWith('+') && !line.startsWith('+++')
                         ? 'text-emerald-400 bg-emerald-950/20 px-1 rounded'
                         : line.startsWith('-') && !line.startsWith('---')
-                        ? 'text-rose-400 bg-rose-950/20 px-1 rounded'
-                        : line.startsWith('@@')
-                        ? 'text-cyan-400 bg-cyan-950/20 px-1 rounded'
-                        : 'text-slate-400'
+                          ? 'text-rose-400 bg-rose-950/20 px-1 rounded'
+                          : line.startsWith('@@')
+                            ? 'text-cyan-400 bg-cyan-950/20 px-1 rounded'
+                            : 'text-slate-400'
                     }
                   >
                     {line}

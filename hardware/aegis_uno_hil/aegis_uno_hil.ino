@@ -75,15 +75,19 @@ void updateLCD(const char *line1, const char *line2) {
 
 void triggerAlarm(int durationMs, int pulses) {
   digitalWrite(RED_LED_PIN, HIGH);
+  int pulsePeriod = durationMs / (pulses * 2);
   for (int i = 0; i < pulses; i++) {
     digitalWrite(BUZZER_PIN, HIGH);
-    delay(durationMs / (pulses * 2));
+    tone(BUZZER_PIN, 1200, pulsePeriod);
+    delay(pulsePeriod);
+    noTone(BUZZER_PIN);
     digitalWrite(BUZZER_PIN, LOW);
-    delay(durationMs / (pulses * 2));
+    delay(pulsePeriod);
   }
 }
 
 void clearAlarms() {
+  noTone(BUZZER_PIN);
   digitalWrite(RED_LED_PIN, LOW);
   digitalWrite(BUZZER_PIN, LOW);
 }
@@ -105,16 +109,20 @@ bool checkRateLimit() {
 // =============================================================================
 
 void processCommand(const char *cmd) {
-  // 1. Rate-limit check
-  if (checkRateLimit()) {
+  // 1. Rate-limit check (Exempt trusted pipeline lifecycle commands from throttling)
+  bool isLifecycleCmd = (strcmp(cmd, "READY") == 0 || strcmp(cmd, "SCAN") == 0 ||
+                         strcmp(cmd, "THREAT") == 0 || strcmp(cmd, "PATCH") == 0 ||
+                         strcmp(cmd, "COMPILE") == 0 || strcmp(cmd, "GUARDS") == 0 ||
+                         strcmp(cmd, "PASS") == 0 || strcmp(cmd, "FAIL") == 0 ||
+                         strcmp(cmd, "STATUS") == 0);
+
+  if (!isLifecycleCmd && checkRateLimit()) {
     digitalWrite(RED_LED_PIN, HIGH);
-    digitalWrite(BUZZER_PIN, HIGH);
+    triggerAlarm(300, 2);
     updateLCD("FLOOD DETECTED  ", "Rate Limited    ");
     Serial.println(F("SECURITY ALERT!"));
     Serial.println(F("Command flood rate-limit exceeded."));
     Serial.println(F("Throttling serial reception for 1500ms."));
-    delay(200);
-    digitalWrite(BUZZER_PIN, LOW);
     return;
   }
 
@@ -151,13 +159,17 @@ void processCommand(const char *cmd) {
   else if (strcmp(cmd, "PASS") == 0) {
     invalidCommandCount = 0;
     clearAlarms();
-    // Victory short chime
+    // Victory short chime (supports both passive and active buzzers)
     digitalWrite(BUZZER_PIN, HIGH);
+    tone(BUZZER_PIN, 1800, 80);
     delay(80);
+    noTone(BUZZER_PIN);
     digitalWrite(BUZZER_PIN, LOW);
     delay(40);
     digitalWrite(BUZZER_PIN, HIGH);
-    delay(120);
+    tone(BUZZER_PIN, 2400, 140);
+    delay(140);
+    noTone(BUZZER_PIN);
     digitalWrite(BUZZER_PIN, LOW);
 
     updateLCD("VERIFIED PASS   ", "Tested Cases OK ");
@@ -166,10 +178,12 @@ void processCommand(const char *cmd) {
   }
   else if (strcmp(cmd, "FAIL") == 0) {
     invalidCommandCount = 0;
+    // Audible multi-pulse warning alarm + latch Red warning LED ON
+    triggerAlarm(600, 4);
     digitalWrite(RED_LED_PIN, HIGH);
-    digitalWrite(BUZZER_PIN, HIGH);
-    updateLCD("VERIFY REJECTED ", "Guard Blocked   ");
+    updateLCD("VERIFY REJECTED ", "Guard Blocked!  ");
     Serial.println(F("[MCU-STATUS] Verdict: REJECTED BY GUARDS."));
+    Serial.println(F("[ALERT] Red warning LED latched ON. Active buzzer alarm pulsed."));
     Serial.println(F("[CRITICAL] Untrusted patch refused execution."));
   }
   else if (strcmp(cmd, "STATUS") == 0) {
@@ -210,6 +224,15 @@ void setup() {
   pinMode(RED_LED_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
   clearAlarms();
+
+  // Quick 1-chirp self-test on boot: confirms Red LED and Buzzer hardware are functional
+  digitalWrite(RED_LED_PIN, HIGH);
+  digitalWrite(BUZZER_PIN, HIGH);
+  tone(BUZZER_PIN, 1800, 80);
+  delay(80);
+  noTone(BUZZER_PIN);
+  digitalWrite(RED_LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
 
   Serial.begin(9600);
 

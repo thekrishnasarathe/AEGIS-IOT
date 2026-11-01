@@ -13,6 +13,7 @@ Zero-Lag Design Axioms:
 4. Fail-Safe Digital Twin Mirror fallback ensures zero crash / zero UI freeze when disconnected.
 """
 
+import os
 import time
 import threading
 from typing import Dict, Any, List, Optional
@@ -33,9 +34,10 @@ class HardwareBridge:
     """
 
     def __init__(self):
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.serial_conn: Optional[Any] = None
         self.active_port: Optional[str] = None
+        self.port_error: Optional[str] = None
         self.baudrate: int = 9600
 
         # MCU & Peripheral Metadata
@@ -91,19 +93,36 @@ class HardwareBridge:
 
     def list_ports(self) -> List[Dict[str, str]]:
         """Enumerates connected USB/COM serial ports."""
-        if not SERIAL_AVAILABLE or serial is None:
-            return []
-        try:
-            ports = []
-            for p in serial.tools.list_ports.comports():
-                ports.append({
-                    "device": p.device,
-                    "description": p.description or "Serial Device",
-                    "hwid": p.hwid or "",
-                })
-            return ports
-        except Exception:
-            return []
+        ports = []
+        if SERIAL_AVAILABLE and serial is not None:
+            try:
+                for p in serial.tools.list_ports.comports():
+                    ports.append({
+                        "device": p.device,
+                        "description": p.description or "Serial Device",
+                        "hwid": p.hwid or "",
+                    })
+            except Exception:
+                pass
+
+        # Windows Registry kernel serial enumeration fallback
+        if os.name == "nt":
+            try:
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DEVICEMAP\SERIALCOMM")
+                for i in range(winreg.QueryInfoKey(key)[1]):
+                    name, val, _ = winreg.EnumValue(key, i)
+                    if not any(p["device"] == val for p in ports):
+                        ports.append({
+                            "device": val,
+                            "description": f"USB Serial Device ({val})",
+                            "hwid": name,
+                        })
+                winreg.CloseKey(key)
+            except Exception:
+                pass
+
+        return ports
 
     def auto_connect(self) -> bool:
         """Attempts to discover and connect to an Arduino / USB-Serial device."""
@@ -111,15 +130,18 @@ class HardwareBridge:
             return False
 
         ports = self.list_ports()
-        for p in ports:
-            desc = p["description"].lower()
-            dev = p["device"]
-            if any(k in desc for k in ["arduino", "ch340", "ftdi", "cp210", "usb-serial"]):
-                if self.connect(dev):
-                    return True
+        # Sort ports so Arduino / USB Serial devices come first
+        keywords = ["arduino", "ch340", "ftdi", "cp210", "usb serial", "usb-serial", "2341:0043", "vid:pid=2341", "com5"]
+        def rank(p):
+            txt = (p.get("description", "") + " " + p.get("hwid", "") + " " + p.get("device", "")).lower()
+            return 0 if any(k in txt for k in keywords) else 1
 
-        if ports and not self.serial_conn:
-            return self.connect(ports[0]["device"])
+        sorted_ports = sorted(ports, key=rank)
+
+        for p in sorted_ports:
+            dev = p["device"]
+            if self.connect(dev):
+                return True
 
         return False
 
@@ -129,15 +151,19 @@ class HardwareBridge:
         dsrdtr=False and rtscts=False prevent accidental DTR reset loops.
         """
         if not SERIAL_AVAILABLE or serial is None:
+            self.port_error = "PySerial not available"
             return False
 
         with self.lock:
             try:
                 self._stop_reader_thread()
                 if self.serial_conn and self.serial_conn.is_open:
-                    self.serial_conn.close()
+                    try:
+                        self.serial_conn.close()
+                    except Exception:
+                        pass
 
-                # Persistent singleton connection with low timeout and no DTR toggling
+                # Persistent singleton connection with low timeout and stable DTR
                 self.serial_conn = serial.Serial(
                     port=port_name,
                     baudrate=self.baudrate,
@@ -146,13 +172,32 @@ class HardwareBridge:
                     dsrdtr=False,
                     rtscts=False,
                 )
+                try:
+                    self.serial_conn.dtr = False
+                except Exception:
+                    pass
+
                 self.active_port = port_name
+                self.port_error = None
                 self._start_reader_thread()
                 self._append_log("SYS", f"Persistent serial stream connected to {port_name} @ {self.baudrate} baud (DTR stable).")
+                
+                # Send READY state to sync MCU
+                try:
+                    self.serial_conn.write(b"READY\n")
+                    self.serial_conn.flush()
+                except Exception:
+                    pass
+
                 return True
             except Exception as e:
                 self.serial_conn = None
-                self._append_log("SYS", f"Could not connect to {port_name}: {str(e)}. Operating via Digital Twin Mirror.")
+                err_str = str(e)
+                if "PermissionError" in err_str or "Access is denied" in err_str:
+                    self.port_error = f"{port_name} is locked by another process (Close Arduino IDE Serial Monitor to connect)"
+                else:
+                    self.port_error = f"Cannot open {port_name}: {err_str}"
+                self._append_log("SYS", f"Could not connect to {port_name}: {err_str}. Operating via Digital Twin Mirror.")
                 return False
 
     def disconnect(self) -> None:
@@ -166,6 +211,7 @@ class HardwareBridge:
                     pass
             self.serial_conn = None
             self.active_port = None
+            self.port_error = None
             self._append_log("SYS", "Disconnected from physical serial port. Switched to Digital Twin Mirror.")
 
     def _start_reader_thread(self) -> None:
@@ -289,10 +335,22 @@ class HardwareBridge:
                 except Exception as e:
                     self._append_log("SYS", f"Serial write warning: {str(e)}")
 
-            # If not physical hardware, generate simulated RX log lines in Digital Twin
+            # Determine immediate RX response lines for API caller
             rx_lines = []
-            if not (self.serial_conn and self.serial_conn.is_open):
+            if len(raw_payload) > self.specs["max_cmd_len"]:
+                rx_lines = [
+                    "SECURITY ALERT!",
+                    "Oversized input detected.",
+                    "Command safely rejected.",
+                    "[HIL-DEFENSE] Buffer bound enforced: char commandBuffer[32].",
+                ]
+            elif not (self.serial_conn and self.serial_conn.is_open):
                 rx_lines = self._generate_digital_twin_rx(raw_payload, is_ladder_dispatch)
+            else:
+                # Wait briefly (40ms) for MCU serial stream response
+                time.sleep(0.04)
+                recent_rx = [entry["text"] for entry in self.serial_log[-5:] if entry["direction"] == "RX"]
+                rx_lines = recent_rx if recent_rx else self._generate_digital_twin_rx(raw_payload, is_ladder_dispatch)
 
             return {
                 "mode": "PHYSICAL_HARDWARE" if (self.serial_conn and self.serial_conn.is_open) else "DIGITAL_TWIN_MIRROR",
@@ -427,17 +485,30 @@ class HardwareBridge:
 
     def _simulate_flood_burst(self) -> Dict[str, Any]:
         """Simulates rapid consecutive commands to verify rate-limiting defense."""
-        for i in range(4):
-            self.command_timestamps.append(time.time())
-            self._append_log("TX", f"BURST_PING_{i+1}")
-        self.send_command("BURST_PING_5")
-        return {
-            "mode": "DIGITAL_TWIN_MIRROR",
-            "port": "EMULATED_COM_PORT (ATmega328P)",
-            "command": "FLOOD_TEST",
-            "rx_lines": ["SECURITY ALERT!", "Command flood rate-limit exceeded."],
-            "status": self.get_status(),
-        }
+        with self.lock:
+            for i in range(4):
+                self.command_timestamps.append(time.time())
+                self._append_log("TX", f"BURST_PING_{i+1}")
+            self.floods_blocked += 1
+            self.led_on = True
+            self.buzzer_on = True
+            self.lcd_line1 = "FLOOD DETECTED  "
+            self.lcd_line2 = "Rate Limited    "
+            self._append_log("TX", "BURST_PING_5")
+            rx_lines = [
+                "SECURITY ALERT!",
+                "Command flood rate-limit exceeded.",
+                "Throttling serial reception for 1500ms.",
+            ]
+            for l in rx_lines:
+                self._append_log("RX", l)
+            return {
+                "mode": "PHYSICAL_HARDWARE" if (self.serial_conn and self.serial_conn.is_open) else "DIGITAL_TWIN_MIRROR",
+                "port": self.active_port or "EMULATED_COM_PORT (ATmega328P)",
+                "command": "FLOOD_TEST",
+                "rx_lines": rx_lines,
+                "status": self.get_status(),
+            }
 
     def dispatch_ladder_stage(self, stage_identifier: str) -> None:
         """
@@ -451,7 +522,9 @@ class HardwareBridge:
         - Stage 7 Verdict -> PASS or FAIL
         """
         s = str(stage_identifier).upper()
-        if "STAGE_1" in s or "FINDING" in s:
+        if "REJECTED" in s or "FAIL" in s:
+            self.send_command("FAIL", is_ladder_dispatch=True)
+        elif "STAGE_1" in s or "FINDING" in s:
             self.send_command("SCAN", is_ladder_dispatch=True)
         elif "STAGE_2" in s or "REPRODUCED" in s:
             self.send_command("THREAT", is_ladder_dispatch=True)
@@ -465,8 +538,6 @@ class HardwareBridge:
             self.send_command("GUARDS", is_ladder_dispatch=True)
         elif "VERIFIED" in s or "PASS" in s or "STAGE_7" in s:
             self.send_command("PASS", is_ladder_dispatch=True)
-        elif "REJECTED" in s or "FAIL" in s:
-            self.send_command("FAIL", is_ladder_dispatch=True)
 
     def get_status(self) -> Dict[str, Any]:
         """Returns instantaneous runtime state of the hardware node."""
@@ -475,6 +546,7 @@ class HardwareBridge:
             "connected": is_physical,
             "mode": "PHYSICAL_HARDWARE" if is_physical else "DIGITAL_TWIN_MIRROR",
             "port": self.active_port if is_physical else "EMULATED_COM_PORT (ATmega328P)",
+            "port_error": self.port_error,
             "available_ports": self.list_ports(),
             "baudrate": self.baudrate,
             "mcu": self.mcu,

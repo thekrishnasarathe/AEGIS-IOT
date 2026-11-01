@@ -96,6 +96,16 @@ class VerificationLadder:
             run_state.current_stage = stage
             run_state.verdict = verdict
             run_state.updated_at = time.time()
+            if verdict == RunVerdict.REJECTED:
+                try:
+                    hardware_bridge.dispatch_ladder_stage("REJECTED")
+                except Exception:
+                    pass
+            elif verdict == RunVerdict.VERIFIED:
+                try:
+                    hardware_bridge.dispatch_ladder_stage("STAGE_7_VERIFIED")
+                except Exception:
+                    pass
             try:
                 run_state.hardware_state = hardware_bridge.get_status()
             except Exception:

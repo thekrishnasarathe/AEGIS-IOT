@@ -66,8 +66,10 @@ export default function HardwareHILStation({ runState }) {
       if (res.ok) {
         const data = await res.json();
         setHardwareState(data);
-        if (data.available_ports && data.available_ports.length > 0 && !selectedPort) {
-          setSelectedPort(data.available_ports[0].device);
+        if (data.available_ports && data.available_ports.length > 0) {
+          if (!selectedPort || !data.available_ports.some((p) => p.device === selectedPort)) {
+            setSelectedPort(data.available_ports[0].device);
+          }
         }
       }
     } catch (err) {
@@ -77,9 +79,33 @@ export default function HardwareHILStation({ runState }) {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 1200);
+    const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedPort]);
+
+  // Audio feedback for buzzer
+  useEffect(() => {
+    if (hardwareState.buzzer_on) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          gain.gain.setValueAtTime(0.12, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.35);
+        }
+      } catch (e) {
+        // Non-critical audio
+      }
+    }
+  }, [hardwareState.buzzer_on]);
 
   // Auto-scroll serial log
   useEffect(() => {
@@ -213,6 +239,26 @@ export default function HardwareHILStation({ runState }) {
           )}
         </div>
       </div>
+
+      {/* Port Lock Warning / Guidance Banner */}
+      {hardwareState.port_error && !isPhysical && (
+        <div className="p-3.5 rounded-xl bg-amber-950/70 border border-amber-500/60 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold text-amber-300">Hardware Port Lock: </span>
+              <span>{hardwareState.port_error}</span>
+            </div>
+          </div>
+          <button
+            onClick={handleConnect}
+            className="px-3 py-1.5 rounded-lg bg-amber-600/40 hover:bg-amber-600/70 text-amber-100 border border-amber-400/50 font-mono text-xs font-semibold transition cursor-pointer self-start sm:self-auto shrink-0 flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry Connect
+          </button>
+        </div>
+      )}
 
       {/* 2. Main Hardware Panel: LCD + Indicators + Interactive Controls */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
