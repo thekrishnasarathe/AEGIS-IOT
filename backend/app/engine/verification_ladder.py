@@ -164,6 +164,8 @@ class VerificationLadder:
 
         run_state.stage_2.status = StageStatus.PASSED
         await checkpoint(LadderStage.STAGE_2_BUG_REPRODUCED)
+        # Allow physical Arduino UNO ATmega328P to complete its full audible 3-beep THREAT alarm (900ms)
+        await asyncio.sleep(0.90)
 
         # =====================================================================
         # SELF-HEALING SYNTHESIS & COMPILATION LOOP (STAGES 3, 4, 5)

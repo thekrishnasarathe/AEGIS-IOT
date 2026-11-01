@@ -264,7 +264,7 @@ class HardwareBridge:
             self.lcd_line2 = "Scanning AST... "
         elif "Gate 02" in line or "Threat detected" in line:
             self.led_on = True
-            self.buzzer_on = False
+            self.buzzer_on = True
             self.lcd_line1 = "THREAT DETECTED "
             self.lcd_line2 = "ASan Crash Repro"
         elif "Gate 03" in line:
@@ -397,7 +397,7 @@ class HardwareBridge:
         elif cmd == "THREAT":
             self.invalid_count = 0
             self.led_on = True
-            self.buzzer_on = False  # Threat reproduction confirms bug: Red LED ON
+            self.buzzer_on = True  # Threat reproduction confirms bug: Red LED + Active Buzzer ON
             self.lcd_line1 = "THREAT DETECTED "
             self.lcd_line2 = "ASan Crash Repro"
         elif cmd == "PATCH":
