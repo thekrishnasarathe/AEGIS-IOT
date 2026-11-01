@@ -15,6 +15,7 @@ import {
   FileWarning,
   ShieldAlert,
   Upload,
+  Radio,
 } from 'lucide-react';
 
 export default function GitHubTopNav({
@@ -70,6 +71,12 @@ export default function GitHubTopNav({
 
         {/* Right: Stage Insurance + Lane Selector + Primary CTA */}
         <div className="flex items-center gap-3">
+          {/* HIL Node Badge */}
+          <span className="hidden xl:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+            <Radio className="w-3.5 h-3.5 text-cyan-400" />
+            HIL: ATmega328P
+          </span>
+
           {/* Stage Insurance Indicator */}
           <span className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />

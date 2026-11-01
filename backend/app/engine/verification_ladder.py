@@ -30,6 +30,7 @@ from app.engine.guards import evaluate_stage_6_guards
 from app.engine.sandbox_executor import sandbox_executor
 from app.engine.llm_router import llm_router
 from app.engine.cwe_classifier import predict_cwe
+from app.engine.hardware_bridge import hardware_bridge
 from app.engine.result_cards import (
     generate_security_score_card,
     generate_hacker_impact_card,
@@ -103,6 +104,10 @@ class VerificationLadder:
         # STAGE 1: Finding & Static Triage (cppcheck + Dual AST Neural Audit)
         # =====================================================================
         run_state.stage_1.status = StageStatus.RUNNING
+        try:
+            hardware_bridge.dispatch_ladder_stage("STAGE_1_FINDING")
+        except Exception:
+            pass
         await checkpoint(LadderStage.STAGE_1_FINDING)
         run_state.stage_1 = self.executor.run_stage_1_cppcheck(orig_c, sample_id)
 
@@ -128,6 +133,10 @@ class VerificationLadder:
         # STAGE 2: Dynamic Bug Reproduction (ASan on original --crash)
         # =====================================================================
         run_state.stage_2.status = StageStatus.RUNNING
+        try:
+            hardware_bridge.dispatch_ladder_stage("STAGE_2_BUG_REPRODUCED")
+        except Exception:
+            pass
         await checkpoint(LadderStage.STAGE_2_BUG_REPRODUCED)
         run_state.stage_2 = self.executor.run_stage_2_bug_reproduce(orig_c, harness_c, sample_id)
         run_state.raw_logs["stage_2_asan_repro"] = run_state.stage_2.raw_output
@@ -158,6 +167,10 @@ class VerificationLadder:
 
             # --- STAGE 3: Patch Synthesis ---
             run_state.stage_3.status = StageStatus.RUNNING
+            try:
+                hardware_bridge.dispatch_ladder_stage("STAGE_3_PATCH_PROPOSED")
+            except Exception:
+                pass
             await checkpoint(LadderStage.STAGE_3_PATCH_PROPOSED)
 
             if candidate_patch_c:
@@ -261,6 +274,10 @@ class VerificationLadder:
                     return run_state
 
             await checkpoint(LadderStage.STAGE_5_CRASH_INPUT_CLEAN)
+            try:
+                hardware_bridge.dispatch_ladder_stage("STAGE_5_CRASH_INPUT_CLEAN")
+            except Exception:
+                pass
             loop_passed = True
             break
 
@@ -337,6 +354,10 @@ class VerificationLadder:
         if not guard_eval["all_passed"]:
             run_state.stage_6.status = StageStatus.FAILED
             run_state.verdict = RunVerdict.REJECTED
+            try:
+                hardware_bridge.dispatch_ladder_stage("REJECTED")
+            except Exception:
+                pass
             self._populate_cards(run_state, sample, orig_c, patched_c)
             await checkpoint(LadderStage.STAGE_6_GUARDS_AND_BEHAVIOR, RunVerdict.REJECTED)
             return run_state
@@ -363,6 +384,10 @@ class VerificationLadder:
         run_state.verdict = RunVerdict.VERIFIED
         run_state.current_stage = LadderStage.STAGE_7_VERIFIED
         run_state.updated_at = time.time()
+        try:
+            hardware_bridge.dispatch_ladder_stage("STAGE_7_VERIFIED")
+        except Exception:
+            pass
 
         # Generate Executive Result Cards (Heuristic Score, Threat Impact, Time Saved, Budget Guard)
         self._populate_cards(run_state, sample, orig_c, patched_c)

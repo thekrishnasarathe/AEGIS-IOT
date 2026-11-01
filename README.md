@@ -163,7 +163,46 @@ The backend auto-synthesizes an isolated smoke harness, runs AST triage, execute
 
 ---
 
-## 8. Competitor Analysis & Industry Positioning
+## 8. Hardware-in-the-Loop (HIL) Microcontroller Node (Indeyes IoT Trainer Kit)
+
+AEGIS-IoT features a physical **Hardware-in-the-Loop (HIL)** microcontroller verification node flashed with production C/C++ embedded firmware (`hardware/aegis_uno_hil/aegis_uno_hil.ino`).
+
+```
+ +-------------------------------------------------------------------------+
+ |                         AEGIS-IoT HIL Node                              |
+ |   Microchip ATmega328P (8-bit AVR @ 16 MHz) · Indeyes IoT Trainer Kit   |
+ |   Flash: 32 KB | SRAM: 2 KB | EEPROM: 1 KB | Serial: 9600 Baud (8-N-1)  |
+ +-------------------------------------------------------------------------+
+       |                               |                           |
+  [ 16x2 LCD ]                 [ Red Warning LED ]          [ Active Buzzer ]
+  Parallel / I2C                 Digital Pin 8               Digital Pin 9
+  Live Stage Telemetry          Active Threat Alarm         Audio Chime Alert
+```
+
+### Hardware Specifications & Pinout
+* **Target MCU:** Microchip ATmega328P (8-bit AVR @ 16 MHz, 32 KB Flash, 2 KB SRAM).
+* **Hardware Kit:** Indeyes IoT Trainer Kit (Arduino UNO R3 architecture).
+* **16x2 Character LCD:** Parallel 4-bit bus (RS=Pin 12, EN=Pin 11, D4=Pin 5, D5=Pin 4, D6=Pin 3, D7=Pin 2) or I2C PCF8574 (`0x27`/`0x3F`).
+* **Red Warning LED:** Digital Pin 8 (Active HIGH).
+* **Active Piezo Buzzer:** Digital Pin 9 (PWM/Digital alert pulses).
+* **Serial Protocol:** 9600 Baud, 8 data bits, no parity, 1 stop bit (8-N-1), ASCII newline (`\n`) delimited.
+
+### Embedded Firmware Security Invariants
+1. **Hardened Command Buffer (`char commandBuffer[32]`):** Maximum input length capped at `MAX_COMMAND_LENGTH = 31`. Input past index 31 sets `inputTooLong = true` without writing past the static SRAM buffer boundary.
+2. **Oversized Input Buffer Overflow Interception (`OVERSIZED_TEST`):** Transmitting 64 bytes (`'A'*64`) triggers an immediate hardware alarm: Red LED lights up, Piezo buzzer sounds, LCD displays `OVERSIZED INPUT / Command Rejected`, and serial returns:
+   ```
+   SECURITY ALERT!
+   Oversized input detected.
+   Command safely rejected.
+   [HIL-DEFENSE] Buffer bound enforced: char commandBuffer[32].
+   ```
+3. **Command Flood Rate-Limiter:** Sliding window tracking prevents denial-of-service spam; inputs exceeding 5 commands in 1500ms trigger `FLOOD DETECTED / Rate Limited`.
+4. **Brute-Force Lockout:** $\ge 3$ consecutive invalid commands trigger `BRUTE FORCE / Alert Triggered` with an audible warning sequence.
+5. **Fail-Safe Digital Twin Mirror:** If the physical USB cable is disconnected, `backend/app/engine/hardware_bridge.py` seamlessly executes a high-fidelity Digital Twin simulation, preserving identical LCD states, actuator alarms, and serial logs with zero downtime.
+
+---
+
+## 9. Competitor Analysis & Industry Positioning
 
 | Capability | Copilot Autofix | Snyk Agent Fix | Semgrep / CodeQL | EMBA / FirmAE | AEGIS-IoT (SIGMOID SQUAD) |
 |:---|:---:|:---:|:---:|:---:|:---:|
@@ -176,7 +215,7 @@ The backend auto-synthesizes an isolated smoke harness, runs AST triage, execute
 
 ---
 
-## 9. Quickstart & Verification Suite
+## 10. Quickstart & Verification Suite
 
 ### Launch Workbench Dev Server
 ```bash

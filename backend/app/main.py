@@ -37,6 +37,7 @@ from app.fixtures.replay_data import (
 from app.engine.verification_ladder import verification_ladder
 from app.engine.sandbox_executor import sandbox_executor
 from app.engine.cwe_classifier import predict_cwe, FEATURE_NAMES, CLASSES
+from app.engine.hardware_bridge import hardware_bridge
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -558,3 +559,58 @@ def generate_benchmark_summary():
             },
         ],
     }
+
+
+class HardwareCommandRequest(BaseModel):
+    command: str
+
+
+class HardwareConnectRequest(BaseModel):
+    port: Optional[str] = None
+
+
+@app.get(f"{settings.API_PREFIX}/hardware/status")
+def get_hardware_status():
+    """
+    Returns live telemetry from the Hardware-in-the-Loop node (Indeyes IoT Trainer Kit / ATmega328P).
+    Falls back gracefully to Hardware Digital Twin Mirror if physical USB serial is disconnected.
+    """
+    return hardware_bridge.get_status()
+
+
+@app.post(f"{settings.API_PREFIX}/hardware/command")
+def send_hardware_command(req: HardwareCommandRequest):
+    """
+    Dispatches a command (e.g. READY, SCAN, THREAT, PATCH, PASS, FAIL, OVERSIZED_TEST, FLOOD_TEST)
+    to the physical ATmega328P microcontroller or Digital Twin Mirror.
+    """
+    return hardware_bridge.send_command(req.command)
+
+
+@app.post(f"{settings.API_PREFIX}/hardware/connect")
+def connect_hardware(req: Optional[HardwareConnectRequest] = None):
+    """
+    Connects to designated USB Serial COM port or auto-discovers connected Arduino.
+    """
+    port = req.port if req else None
+    if port:
+        success = hardware_bridge.connect(port)
+    else:
+        success = hardware_bridge.auto_connect()
+    return {
+        "success": success,
+        "status": hardware_bridge.get_status(),
+    }
+
+
+@app.post(f"{settings.API_PREFIX}/hardware/disconnect")
+def disconnect_hardware():
+    """
+    Disconnects physical USB Serial and switches to Digital Twin Mirror.
+    """
+    hardware_bridge.disconnect()
+    return {
+        "success": True,
+        "status": hardware_bridge.get_status(),
+    }
+

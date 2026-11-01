@@ -188,9 +188,23 @@ def generate_firmware_budget_guard(
     is_within_budget = (text_delta <= 256) and (stack_delta <= 128)
     status = "WITHIN_MCU_BUDGET" if is_within_budget else "BUDGET_WARNING"
 
+    # Hardware-in-the-Loop Microcontroller Target (ATmega328P @ 16 MHz)
+    mcu_flash_total = 32768   # 32 KB Flash ROM
+    mcu_sram_total = 2048     # 2 KB SRAM
+    serial_buf_cap = 32       # 32-Byte Hardened Serial Buffer
+    flash_pct = round((patched_text / mcu_flash_total) * 100.0, 1)
+    sram_pct = round((patched_stack / mcu_sram_total) * 100.0, 1)
+
     return {
         "label": "Hardware Enforced MCU Budget",
         "budget_status": status,
+        "mcu_target": "Microchip ATmega328P (8-bit AVR @ 16 MHz)",
+        "mcu_trainer_kit": "Indeyes IoT Trainer Kit (Arduino UNO R3)",
+        "mcu_flash_total_bytes": mcu_flash_total,
+        "mcu_sram_total_bytes": mcu_sram_total,
+        "mcu_serial_buffer_capacity": serial_buf_cap,
+        "flash_utilization_pct": flash_pct,
+        "sram_stack_utilization_pct": sram_pct,
         "orig_text_bytes": orig_text,
         "patched_text_bytes": patched_text,
         "text_delta_bytes": text_delta,

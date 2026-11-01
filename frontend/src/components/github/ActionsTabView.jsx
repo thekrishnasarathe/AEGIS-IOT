@@ -10,6 +10,7 @@ import {
 import SecurityCommandCenter from '../verification/SecurityCommandCenter';
 import MLAuditCard from '../verification/MLAuditCard';
 import ResultCardsGrid from '../verification/ResultCardsGrid';
+import HardwareHILStation from '../verification/HardwareHILStation';
 
 export default function ActionsTabView({
   runState,
@@ -168,7 +169,10 @@ export default function ActionsTabView({
         onSwitchToTab={onSwitchToTab}
       />
 
-      {/* 4. The 4 Executive Intelligence Cards */}
+      {/* 4. Hardware-in-the-Loop (HIL) Physical Microcontroller Station */}
+      <HardwareHILStation runState={runState} />
+
+      {/* 5. The 4 Executive Intelligence Cards */}
       <div className="pt-2">
         <div className="flex items-center gap-2 mb-3">
           <span className="font-pixel text-xs text-white uppercase tracking-wider">

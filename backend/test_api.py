@@ -120,8 +120,32 @@ async def test_api_suite_async():
         assert claims_data["status"] == "COMPLIANT"
         print(f"  -> Claims Audit Status: {claims_data['status']} ({claims_data['scenarios_audited']} scenarios)")
 
+        # 10. Hardware-in-the-Loop (HIL) Endpoints (ATmega328P / Digital Twin)
+        print("\n[TEST 10] GET /api/hardware/status & POST /api/hardware/command ...")
+        hw_res = await client.get("/api/hardware/status")
+        assert hw_res.status_code == 200
+        hw_data = hw_res.json()
+        assert hw_data["mcu"].startswith("ATmega328P")
+        assert hw_data["specs"]["buffer_capacity"] == 32
+        print(f"  -> MCU Target: {hw_data['mcu']} | Mode: {hw_data['mode']}")
+
+        # Test normal command
+        cmd_res = await client.post("/api/hardware/command", json={"command": "READY"})
+        assert cmd_res.status_code == 200
+        assert cmd_res.json()["status"]["lcd_line1"].strip() == "AEGIS-IoT HIL"
+        print("  -> Sent 'READY' -> LCD: 'AEGIS-IoT HIL / Device Ready'")
+
+        # Test oversized 64-byte buffer overflow attack
+        ov_res = await client.post("/api/hardware/command", json={"command": "OVERSIZED_TEST"})
+        assert ov_res.status_code == 200
+        ov_data = ov_res.json()
+        assert any("SECURITY ALERT" in line for line in ov_data["rx_lines"])
+        assert ov_data["status"]["led_on"] is True
+        assert "OVERSIZED INPUT" in ov_data["status"]["lcd_line1"]
+        print("  -> Fired 64-Byte Attack -> Hardware Buffer Guard intercepted overflow! Red LED & Alarm Active.")
+
     print("\n=================================================================")
-    print("      ALL 9 FASTAPI ENDPOINT TESTS PASSED WITH 100% ACCURACY!    ")
+    print("      ALL 10 FASTAPI ENDPOINT TESTS PASSED WITH 100% ACCURACY!   ")
     print("=================================================================")
 
 

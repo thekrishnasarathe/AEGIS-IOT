@@ -334,6 +334,42 @@ def main():
 
     style_table(comp_table, [Inches(1.5), Inches(1.0), Inches(1.2), Inches(0.9), Inches(1.0), Inches(0.9)], header_bg="0F2240")
 
+    doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+    add_heading_2(doc, "E. Hardware-in-the-Loop (HIL) Microcontroller Integration")
+    p_hil = doc.add_paragraph(
+        "To validate firmware verification against physical bare-metal constraints, AEGIS-IoT includes a physical "
+        "Hardware-in-the-Loop (HIL) microcontroller station based on the Indeyes IoT Trainer Kit (Microchip ATmega328P @ 16 MHz). "
+        "The node communicates via USB Serial (9600 Baud, 8-N-1) and controls a 16x2 LCD, Red Warning LED (Pin 8), and Active Buzzer (Pin 9).\n\n"
+        "Key Embedded Security Invariants:\n"
+        "1. Hardened Serial Buffer (32 Bytes): char commandBuffer[32] with MAX_COMMAND_LENGTH = 31. Any input exceeding 31 bytes "
+        "is dropped before writing past the buffer boundary in SRAM, triggering the Red LED + Piezo alarm.\n"
+        "2. Oversized Buffer Attack Simulation: Sending 64 bytes ('A'*64 via OVERSIZED_TEST) proves physical buffer overflow prevention.\n"
+        "3. Command Flood Rate-Limiter: Intercepts DoS command bursts (>5 commands per 1500ms) with serial throttling.\n"
+        "4. Brute-Force Sequence Lockout: Threshold of >=3 consecutive invalid commands triggers hardware lockout.\n"
+        "5. Fail-Safe Digital Twin Mirror: When disconnected, backend/app/engine/hardware_bridge.py executes an exact digital twin mirror, "
+        "ensuring zero presentation crashes or UI latency."
+    )
+    p_hil.paragraph_format.space_after = Pt(8)
+
+    hil_table = doc.add_table(rows=6, cols=3)
+    hil_headers = ["HIL Lifecycle Command", "MCU Physical Actuation", "Serial Output & Safety Verification"]
+    for j, h in enumerate(hil_headers):
+        hil_table.cell(0, j).text = h
+
+    hil_rows = [
+        ("READY", "LCD: 'AEGIS-IoT HIL / Device Ready' · LED: OFF · Buzzer: OFF", "[MCU-STATUS] Ready for verification ladder."),
+        ("SCAN (Gate 01)", "LCD: 'GATE 01: SCAN / AST Triage...' · LED: OFF", "[MCU-STATUS] Gate 01: AST syntax tree scan initiated."),
+        ("THREAT (Gate 02)", "LCD: 'GATE 02: THREAT / ASan Crash Repro' · LED: ON · Buzzer: 2 Pulses", "[ALERT] Red warning LED active. Threat detected by AddressSanitizer."),
+        ("OVERSIZED_TEST (64B)", "LCD: 'OVERSIZED INPUT / Command Rejected' · LED: ON · Buzzer: Alarm", "SECURITY ALERT! Oversized input detected. Command safely rejected."),
+        ("PASS / FAIL (Gate 07)", "LCD: 'VERIFIED PASS' (Two-tone Chime) OR 'VERIFY REJECTED' (Alarm)", "Verdict: VERIFIED FOR TESTED CASES · Integrity within ATmega328P budget."),
+    ]
+    for i, row in enumerate(hil_rows, start=1):
+        for j, val in enumerate(row):
+            hil_table.cell(i, j).text = val
+
+    style_table(hil_table, [Inches(1.8), Inches(2.6), Inches(2.1)], header_bg="162436")
+
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
 
     # =========================================================================
