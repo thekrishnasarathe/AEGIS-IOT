@@ -408,13 +408,13 @@ class HardwareBridge:
             self.lcd_line2 = "Patching C...   "
         elif cmd == "COMPILE":
             self.invalid_count = 0
-            self.led_on = False
+            self.led_on = True  # Red LED stays ON during compilation
             self.buzzer_on = False
             self.lcd_line1 = "GCC -O2 -Werror "
             self.lcd_line2 = "Build Clean     "
         elif cmd == "GUARDS":
             self.invalid_count = 0
-            self.led_on = False
+            self.led_on = True  # Red LED stays ON during guard evaluation
             self.buzzer_on = False
             self.lcd_line1 = "STAGE 6 GUARDS  "
             self.lcd_line2 = "AntiCheat Check "
