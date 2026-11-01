@@ -1,5 +1,5 @@
 # AEGIS-IoT: Verification & Claims Traceability Audit
-**Generated:** `2026-11-01 04:18:47 UTC`  
+**Generated:** `2026-11-01 04:51:04 UTC`  
 **Project:** AEGIS-IoT — Evidence-Gated C Firmware Vulnerability Repair  
 **Team:** SIGMOID SQUAD (Scope Global Skills University, Bhopal)  
 **Event:** AI-Manthan 2.0 Grand Finale (AITR, Indore)  

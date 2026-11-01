@@ -5,12 +5,11 @@
  * Flash: 32 KB | SRAM: 2 KB | EEPROM: 1 KB | Serial: 9600 Baud
  * Peripherals: 16x2 Character LCD, Red Warning LED (D8/D13/D7/D6/A0), Active Buzzer (D9/D10)
  *
- * Capabilities:
- * 1. 32-Byte Serial Command Buffer with Strict Hardware Buffer Overflow Guard (MAX_COMMAND_LENGTH = 31)
- * 2. Real-time Physical Indicator Actuation (5V DC Active Buzzer + Solid Latching Red LED)
- * 3. 16x2 LCD Status Telemetry Mirroring Laptop Verification Ladder
- * 4. Runtime Command Flood Rate-Limiting (> 5 commands in 1500ms for non-lifecycle commands)
- * 5. Repeated Invalid Command / Brute Force Detection (>= 3 consecutive invalid inputs)
+ * Strict Operational Logic:
+ * 1. During normal verification pipeline execution (READY, SCAN, REPRO, PATCH, COMPILE, CLEAN, GUARDS, PASS):
+ *    Red LED = LOW (OFF), Buzzer = LOW (SILENT). The 16x2 LCD cleanly reflects gate progression.
+ * 2. Only during an explicit THREAT, security rejection (FAIL), buffer attack (>31 bytes),
+ *    or brute force / flood attack does the Red LED latch SOLID ON and the Active Buzzer sound an audible alarm!
  *
  * Author: Team SIGMOID SQUAD (Scope Global Skills University, Bhopal)
  * Competition: AI-Manthan 2.0 Grand Finale (AITR, Indore — 2026)
@@ -36,9 +35,8 @@
 
 // =============================================================================
 // Pin Definitions
-// Multi-Pin Red LED Driver: Simultaneously drives Pin 8 (primary), Pin 13
-// (UNO onboard LED), Pin 7, Pin 6, and Pin A0. This guarantees 100% illumination
-// regardless of which pin the trainer kit or shield wires the Red LED to!
+// Multi-Pin Red LED Driver: Drives Pin 8 (primary), Pin 13 (UNO onboard LED),
+// Pin 7, Pin 6, and Pin A0 simultaneously.
 // =============================================================================
 const int RED_LED_PIN     = 8;   // Primary Red Warning LED
 const int RED_LED_PIN_13  = 13;  // Arduino UNO Onboard & Shield LED
@@ -51,7 +49,6 @@ const int BUZZER_PIN_ALT  = 10;  // Auxiliary Buzzer Pin (D10)
 
 // =============================================================================
 // Security Constants & Memory Constraints
-// ATmega328P has only 2048 bytes of SRAM. Fixed static allocation is mandatory.
 // =============================================================================
 #define COMMAND_BUFFER_CAPACITY 32
 const int MAX_COMMAND_LENGTH = 31;
@@ -90,7 +87,7 @@ void setBuzzer(bool state) {
 
 // Pulses the 5V active buzzer while keeping the Red LED SOLID ON
 void pulseBuzzer(int onMs, int offMs, int count) {
-  setRedLed(true); // Red LED stays on
+  setRedLed(true);
   for (int i = 0; i < count; i++) {
     setBuzzer(true);
     delay(onMs);
@@ -131,8 +128,9 @@ bool checkRateLimit() {
 void processCommand(const char *cmd) {
   // 1. Rate-limit check (Exempt trusted pipeline lifecycle commands from throttling)
   bool isLifecycleCmd = (strcmp(cmd, "READY") == 0 || strcmp(cmd, "SCAN") == 0 ||
-                         strcmp(cmd, "THREAT") == 0 || strcmp(cmd, "PATCH") == 0 ||
-                         strcmp(cmd, "COMPILE") == 0 || strcmp(cmd, "GUARDS") == 0 ||
+                         strcmp(cmd, "REPRO") == 0 || strcmp(cmd, "THREAT") == 0 ||
+                         strcmp(cmd, "PATCH") == 0 || strcmp(cmd, "COMPILE") == 0 ||
+                         strcmp(cmd, "CLEAN") == 0 || strcmp(cmd, "GUARDS") == 0 ||
                          strcmp(cmd, "PASS") == 0 || strcmp(cmd, "FAIL") == 0 ||
                          strcmp(cmd, "OVERSIZED_TEST") == 0 || strcmp(cmd, "STATUS") == 0);
 
@@ -149,21 +147,59 @@ void processCommand(const char *cmd) {
   // 2. Lifecycle Command Handling
   if (strcmp(cmd, "READY") == 0) {
     invalidCommandCount = 0;
-    clearAlarms();
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF
     updateLCD("AEGIS-IoT HIL   ", "Device Ready    ");
     Serial.println(F("[MCU-STATUS] Ready for verification ladder."));
     Serial.println(F("[PERIPHERALS] LCD: Active | LED: OFF | Buzzer: OFF"));
   }
   else if (strcmp(cmd, "SCAN") == 0) {
     invalidCommandCount = 0;
-    clearAlarms();
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF
     updateLCD("GATE 01: SCAN   ", "AST Triage...   ");
     Serial.println(F("[MCU-STATUS] Gate 01: AST syntax tree scan initiated."));
   }
-  else if (strcmp(cmd, "THREAT") == 0) {
+  else if (strcmp(cmd, "REPRO") == 0) {
     invalidCommandCount = 0;
-    setRedLed(true); // Red LED stays SOLID ON
-    updateLCD("GATE 02: THREAT ", "ASan Crash Repro");
+    clearAlarms(); // Normal pipeline execution: Red LED = OFF, Buzzer = OFF
+    updateLCD("GATE 02: REPRO  ", "ASan Crash Repro");
+    Serial.println(F("[MCU-STATUS] Gate 02: Memory crash reproduced in sandbox."));
+  }
+  else if (strcmp(cmd, "PATCH") == 0) {
+    invalidCommandCount = 0;
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF
+    updateLCD("GATE 03: PATCH  ", "Synthesizing... ");
+    Serial.println(F("[MCU-STATUS] Gate 03: Neural patch synthesis in progress."));
+  }
+  else if (strcmp(cmd, "COMPILE") == 0) {
+    invalidCommandCount = 0;
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF
+    updateLCD("GATE 04: COMPILE", "GCC -O2 -Werror ");
+    Serial.println(F("[MCU-STATUS] Gate 04: GCC compiler verified zero errors."));
+  }
+  else if (strcmp(cmd, "CLEAN") == 0) {
+    invalidCommandCount = 0;
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF
+    updateLCD("GATE 05: CLEAN  ", "Replay Clean OK ");
+    Serial.println(F("[MCU-STATUS] Gate 05: Crash input replayed cleanly on patch."));
+  }
+  else if (strcmp(cmd, "GUARDS") == 0) {
+    invalidCommandCount = 0;
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF
+    updateLCD("STAGE 6: GUARDS ", "AntiCheat Check ");
+    Serial.println(F("[MCU-STATUS] Gate 06: Deterministic anti-cheat guards passed."));
+  }
+  else if (strcmp(cmd, "PASS") == 0) {
+    invalidCommandCount = 0;
+    clearAlarms(); // Red LED = OFF, Buzzer = OFF (Silent clean pass!)
+    updateLCD("VERIFIED PASS   ", "MCU Budget OK   ");
+    Serial.println(F("[MCU-STATUS] Verdict: VERIFIED FOR TESTED CASES."));
+    Serial.println(F("[INTEGRITY] Flash & SRAM delta within ATmega328P budget."));
+  }
+  else if (strcmp(cmd, "THREAT") == 0) {
+    // Explicit manual THREAT test: Alert Active!
+    invalidCommandCount = 0;
+    setRedLed(true);
+    updateLCD("THREAT DETECTED ", "ASan Crash Repro");
     Serial.println(F("[MCU-STATUS] Gate 02: Memory breach confirmed by AddressSanitizer."));
     Serial.println(F("[ALERT] Red warning LED active. Threat detected."));
 
@@ -172,43 +208,12 @@ void processCommand(const char *cmd) {
     setBuzzer(true);
     delay(300);
     setBuzzer(false);
-    setRedLed(true); // LATCH RED LED SOLID ON!
-  }
-  else if (strcmp(cmd, "PATCH") == 0) {
-    invalidCommandCount = 0;
-    setBuzzer(false);
-    setRedLed(true); // KEEP RED LED SOLID ON (Vulnerability repair in progress)
-    updateLCD("GATE 03: PATCH  ", "Synthesizing... ");
-    Serial.println(F("[MCU-STATUS] Gate 03: Neural patch synthesis in progress."));
-  }
-  else if (strcmp(cmd, "COMPILE") == 0) {
-    invalidCommandCount = 0;
-    setBuzzer(false);
-    setRedLed(true); // KEEP RED LED SOLID ON
-    updateLCD("GATE 04: COMPILE", "GCC -O2 -Werror ");
-    Serial.println(F("[MCU-STATUS] Gate 04: GCC compiler verified zero errors."));
-  }
-  else if (strcmp(cmd, "GUARDS") == 0) {
-    invalidCommandCount = 0;
-    setBuzzer(false);
-    setRedLed(true); // KEEP RED LED SOLID ON until verdict
-    updateLCD("STAGE 6 GUARDS  ", "AntiCheat Check ");
-    Serial.println(F("[MCU-STATUS] Gate 06: Deterministic anti-cheat guards passed."));
-  }
-  else if (strcmp(cmd, "PASS") == 0) {
-    invalidCommandCount = 0;
-    setRedLed(false); // ONLY turn Red LED OFF on verified pass!
-    setBuzzer(false);
-    // 2 short victory chirps: 80ms HIGH / 60ms LOW x 2
-    pulseBuzzer(80, 60, 2);
-    clearAlarms();
-    updateLCD("VERIFIED PASS   ", "Tested Cases OK ");
-    Serial.println(F("[MCU-STATUS] Verdict: VERIFIED FOR TESTED CASES."));
-    Serial.println(F("[INTEGRITY] Flash & SRAM delta within ATmega328P budget."));
+    setRedLed(true); // Latch Red LED ON
   }
   else if (strcmp(cmd, "FAIL") == 0) {
+    // Security Guard Rejection: Alert Active!
     invalidCommandCount = 0;
-    setRedLed(true); // LATCH RED LED SOLID ON!
+    setRedLed(true);
     updateLCD("VERIFY REJECTED ", "Guard Blocked!  ");
     Serial.println(F("[MCU-STATUS] Verdict: REJECTED BY GUARDS."));
     Serial.println(F("[ALERT] Red warning LED latched ON. Active buzzer alarm pulsed."));
@@ -216,10 +221,11 @@ void processCommand(const char *cmd) {
 
     // 5 loud buzzer alarm pulses: 220ms HIGH / 80ms LOW x 5
     pulseBuzzer(220, 80, 5);
-    setRedLed(true); // Latch Red LED SOLID ON
+    setRedLed(true); // Latch Red LED ON
   }
   else if (strcmp(cmd, "OVERSIZED_TEST") == 0) {
-    setRedLed(true); // LATCH RED LED SOLID ON!
+    // Explicit buffer overflow attack test: Alert Active!
+    setRedLed(true);
     updateLCD("OVERSIZED INPUT ", "Command Rejected");
     Serial.println(F("SECURITY ALERT!"));
     Serial.println(F("Oversized input detected."));
@@ -231,7 +237,7 @@ void processCommand(const char *cmd) {
     setBuzzer(true);
     delay(500);
     setBuzzer(false);
-    setRedLed(true); // Latch Red LED SOLID ON
+    setRedLed(true);
   }
   else if (strcmp(cmd, "STATUS") == 0) {
     Serial.println(F("[MCU-INFO] Microchip ATmega328P @ 16 MHz."));
@@ -277,18 +283,7 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(BUZZER_PIN_ALT, OUTPUT);
 
-  clearAlarms();
-
-  // Quick 2-beep power-on self-test: confirms Red LED and Active Buzzer hardware are functional
-  setRedLed(true);
-  setBuzzer(true);
-  delay(120);
-  setBuzzer(false);
-  delay(80);
-  setBuzzer(true);
-  delay(120);
-  setBuzzer(false);
-  setRedLed(false);
+  clearAlarms(); // All LEDs and Buzzer SILENT on boot
 
   Serial.begin(9600);
 
@@ -318,7 +313,6 @@ void loop() {
     if (inChar == '\n' || inChar == '\r') {
       if (inputTooLong) {
         // OVERSIZED INPUT ATTACK INTERCEPTED!
-        // The command exceeded 31 bytes. The hardware buffer was never breached.
         setRedLed(true);
         updateLCD("OVERSIZED INPUT ", "Command Rejected");
 

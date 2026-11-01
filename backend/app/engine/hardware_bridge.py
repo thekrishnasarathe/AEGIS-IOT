@@ -262,16 +262,36 @@ class HardwareBridge:
             self.buzzer_on = False
             self.lcd_line1 = "GATE 01: SCAN   "
             self.lcd_line2 = "Scanning AST... "
-        elif "Gate 02" in line or "Threat detected" in line:
+        elif "Gate 02" in line and "Threat detected" in line:
             self.led_on = True
             self.buzzer_on = True
             self.lcd_line1 = "THREAT DETECTED "
             self.lcd_line2 = "ASan Crash Repro"
-        elif "Gate 03" in line:
-            self.led_on = True
+        elif "Gate 02" in line:
+            self.led_on = False
             self.buzzer_on = False
-            self.lcd_line1 = "AI SYNTHESIS    "
-            self.lcd_line2 = "Patching C...   "
+            self.lcd_line1 = "GATE 02: REPRO  "
+            self.lcd_line2 = "ASan Crash Repro"
+        elif "Gate 03" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "GATE 03: PATCH  "
+            self.lcd_line2 = "Synthesizing... "
+        elif "Gate 04" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "GATE 04: COMPILE"
+            self.lcd_line2 = "Build Clean     "
+        elif "Gate 05" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "GATE 05: CLEAN  "
+            self.lcd_line2 = "Replay Clean OK "
+        elif "Gate 06" in line or "STAGE 6" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "STAGE 6: GUARDS "
+            self.lcd_line2 = "AntiCheat Check "
         elif "VERIFIED FOR TESTED CASES" in line:
             self.led_on = False
             self.buzzer_on = False
@@ -394,6 +414,12 @@ class HardwareBridge:
             self.buzzer_on = False
             self.lcd_line1 = "GATE 01: SCAN   "
             self.lcd_line2 = "Scanning AST... "
+        elif cmd == "REPRO":
+            self.invalid_count = 0
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "GATE 02: REPRO  "
+            self.lcd_line2 = "ASan Crash Repro"
         elif cmd == "THREAT":
             self.invalid_count = 0
             self.led_on = True
@@ -402,21 +428,27 @@ class HardwareBridge:
             self.lcd_line2 = "ASan Crash Repro"
         elif cmd == "PATCH":
             self.invalid_count = 0
-            self.led_on = True
+            self.led_on = False
             self.buzzer_on = False
-            self.lcd_line1 = "AI SYNTHESIS    "
-            self.lcd_line2 = "Patching C...   "
+            self.lcd_line1 = "GATE 03: PATCH  "
+            self.lcd_line2 = "Synthesizing... "
         elif cmd == "COMPILE":
             self.invalid_count = 0
-            self.led_on = True  # Red LED stays ON during compilation
+            self.led_on = False
             self.buzzer_on = False
-            self.lcd_line1 = "GCC -O2 -Werror "
+            self.lcd_line1 = "GATE 04: COMPILE"
             self.lcd_line2 = "Build Clean     "
+        elif cmd == "CLEAN":
+            self.invalid_count = 0
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "GATE 05: CLEAN  "
+            self.lcd_line2 = "Replay Clean OK "
         elif cmd == "GUARDS":
             self.invalid_count = 0
-            self.led_on = True  # Red LED stays ON during guard evaluation
+            self.led_on = False
             self.buzzer_on = False
-            self.lcd_line1 = "STAGE 6 GUARDS  "
+            self.lcd_line1 = "STAGE 6: GUARDS "
             self.lcd_line2 = "AntiCheat Check "
         elif cmd == "PASS":
             self.invalid_count = 0
@@ -464,9 +496,11 @@ class HardwareBridge:
             responses = {
                 "READY": ["[MCU-STATUS] Ready for verification ladder.", "[PERIPHERALS] LCD: Active | LED: OFF | Buzzer: OFF"],
                 "SCAN": ["[MCU-STATUS] Gate 01: AST syntax tree scan initiated."],
+                "REPRO": ["[MCU-STATUS] Gate 02: Memory crash reproduced in sandbox."],
                 "THREAT": ["[MCU-STATUS] Gate 02: Memory breach confirmed by AddressSanitizer.", "[ALERT] Red warning LED active. Threat detected."],
                 "PATCH": ["[MCU-STATUS] Gate 03: Neural patch synthesis in progress."],
                 "COMPILE": ["[MCU-STATUS] Gate 04: GCC compiler verified zero errors."],
+                "CLEAN": ["[MCU-STATUS] Gate 05: Crash input replayed cleanly on patch."],
                 "GUARDS": ["[MCU-STATUS] Gate 06: Deterministic anti-cheat guards passed."],
                 "PASS": ["[MCU-STATUS] Verdict: VERIFIED FOR TESTED CASES.", "[INTEGRITY] Flash & SRAM delta within ATmega328P budget."],
                 "FAIL": ["[MCU-STATUS] Verdict: REJECTED BY GUARDS.", "[CRITICAL] Untrusted patch refused execution."],
@@ -514,12 +548,12 @@ class HardwareBridge:
         """
         Non-blocking lockstep dispatch from verification ladder:
         - Stage 1 Finding -> SCAN
-        - Stage 2 Repro   -> THREAT
+        - Stage 2 Repro   -> REPRO (calm progress update on LCD, LED=OFF, Buzzer=OFF)
         - Stage 3 Patch   -> PATCH
         - Stage 4 Compile -> COMPILE
-        - Stage 5 Clean   -> OVERSIZED_TEST
+        - Stage 5 Clean   -> CLEAN
         - Stage 6 Guards  -> GUARDS
-        - Stage 7 Verdict -> PASS or FAIL
+        - Stage 7 Verdict -> PASS (silent clean pass) or FAIL (alarm active)
         """
         s = str(stage_identifier).upper()
         if "REJECTED" in s or "FAIL" in s:
@@ -527,13 +561,13 @@ class HardwareBridge:
         elif "STAGE_1" in s or "FINDING" in s:
             self.send_command("SCAN", is_ladder_dispatch=True)
         elif "STAGE_2" in s or "REPRODUCED" in s:
-            self.send_command("THREAT", is_ladder_dispatch=True)
+            self.send_command("REPRO", is_ladder_dispatch=True)
         elif "STAGE_3" in s or "PATCH" in s:
             self.send_command("PATCH", is_ladder_dispatch=True)
         elif "STAGE_4" in s or "COMPILES" in s:
             self.send_command("COMPILE", is_ladder_dispatch=True)
-        elif "STAGE_5" in s or "CRASH_INPUT_CLEAN" in s:
-            self.send_command("OVERSIZED_TEST", is_ladder_dispatch=True)
+        elif "STAGE_5" in s or "CRASH_INPUT_CLEAN" in s or "CLEAN" in s:
+            self.send_command("CLEAN", is_ladder_dispatch=True)
         elif "STAGE_6" in s or "GUARDS" in s:
             self.send_command("GUARDS", is_ladder_dispatch=True)
         elif "VERIFIED" in s or "PASS" in s or "STAGE_7" in s:
