@@ -215,7 +215,7 @@ Provide your complete patched 'target.c' inside ```c ... ```:
                         "https://api.groq.com/openai/v1/chat/completions",
                         payload,
                         headers,
-                        timeout=12.0
+                        timeout=2.5
                     )
                     if status == 200:
                         raw_c = data["choices"][0]["message"]["content"]
@@ -248,7 +248,7 @@ Provide your complete patched 'target.c' inside ```c ... ```:
                         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1500},
                     }
                     headers = {"Content-Type": "application/json"}
-                    status, data = self._sync_post_json(url, payload, headers, timeout=15.0)
+                    status, data = self._sync_post_json(url, payload, headers, timeout=2.5)
                     if status == 200:
                         raw_c = data["candidates"][0]["content"]["parts"][0]["text"]
                         patched_c = self.extract_c_code(raw_c)
@@ -291,7 +291,7 @@ Provide your complete patched 'target.c' inside ```c ... ```:
                         "https://openrouter.ai/api/v1/chat/completions",
                         payload,
                         headers,
-                        timeout=15.0
+                        timeout=2.5
                     )
                     if status == 200:
                         raw_c = data["choices"][0]["message"]["content"]
@@ -331,7 +331,7 @@ Provide your complete patched 'target.c' inside ```c ... ```:
                         "temperature": 0.1,
                         "max_tokens": 1500,
                     }
-                    async with httpx.AsyncClient(timeout=12.0) as client:
+                    async with httpx.AsyncClient(timeout=2.5) as client:
                         resp = await client.post(f"{self.cloud_base_url}/chat/completions", headers=headers, json=payload)
                         if resp.status_code == 200:
                             data = resp.json()
@@ -358,41 +358,57 @@ Provide your complete patched 'target.c' inside ```c ... ```:
         # ----------------------------------------------------------------------
         should_try_ollama = (
             lane == ExecutionLane.LOCAL_OLLAMA or
-            provider_preference in ["auto", "ollama"] or
+            provider_preference in ["auto", "ollama", "ollama_deep"] or
             should_try_cloud
         ) and (lane != ExecutionLane.REPLAY_FIXTURE)
 
         if should_try_ollama:
+            is_deep = (provider_preference == "ollama_deep")
+            ollama_active = False
+
+            # Fast 0.3s health ping check to avoid stalling if Ollama daemon is offline or cold
             try:
-                t0 = time.time()
-                payload = {
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.1, "num_predict": 1200},
-                }
-                async with httpx.AsyncClient(timeout=self.ollama_timeout) as client:
-                    resp = await client.post(self.ollama_url, json=payload)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        raw_content = data.get("response", "")
-                        patched_c = self.extract_c_code(raw_content)
-                        if patched_c and len(patched_c) > 20:
-                            elapsed_ms = round((time.time() - t0) * 1000.0, 2)
-                            fallback_trace.append(f"ollama: success ({self.ollama_model}, {elapsed_ms}ms)")
-                            return {
-                                "patched_c": patched_c,
-                                "model_id": f"ollama:{self.ollama_model}",
-                                "provider_used": "ollama",
-                                "model_used": self.ollama_model,
-                                "latency_ms": elapsed_ms,
-                                "fallback_trace": fallback_trace,
-                                "explanation": f"Synthesized locally via Ollama {self.ollama_model} (attempt {attempt}).",
-                                "prompt_hash": prompt_hash,
-                                "provenance": Provenance.LOCAL_SUBPROCESS,
-                            }
-            except Exception as e:
-                fallback_trace.append(f"ollama: failed ({e})")
+                base_health_url = self.ollama_url.replace("/api/generate", "/api/tags")
+                async with httpx.AsyncClient(timeout=0.3) as health_client:
+                    h_res = await health_client.get(base_health_url)
+                    if h_res.status_code == 200:
+                        ollama_active = True
+            except Exception:
+                ollama_active = False
+                fallback_trace.append("ollama: offline or slow response (>0.3s health ping)")
+
+            if ollama_active or is_deep:
+                gen_timeout = self.ollama_timeout if is_deep else 3.0
+                try:
+                    t0 = time.time()
+                    payload = {
+                        "model": self.ollama_model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"temperature": 0.1, "num_predict": 1200},
+                    }
+                    async with httpx.AsyncClient(timeout=gen_timeout) as client:
+                        resp = await client.post(self.ollama_url, json=payload)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            raw_content = data.get("response", "")
+                            patched_c = self.extract_c_code(raw_content)
+                            if patched_c and len(patched_c) > 20:
+                                elapsed_ms = round((time.time() - t0) * 1000.0, 2)
+                                fallback_trace.append(f"ollama: success ({self.ollama_model}, {elapsed_ms}ms)")
+                                return {
+                                    "patched_c": patched_c,
+                                    "model_id": f"ollama:{self.ollama_model}",
+                                    "provider_used": "ollama",
+                                    "model_used": self.ollama_model,
+                                    "latency_ms": elapsed_ms,
+                                    "fallback_trace": fallback_trace,
+                                    "explanation": f"Synthesized locally via Ollama {self.ollama_model} (attempt {attempt}).",
+                                    "prompt_hash": prompt_hash,
+                                    "provenance": Provenance.LOCAL_SUBPROCESS,
+                                }
+                except Exception as e:
+                    fallback_trace.append(f"ollama: failed ({e})")
 
         # ----------------------------------------------------------------------
         # STAGE INSURANCE DETERMINISTIC FALLBACK (REPLAY_FIXTURE)

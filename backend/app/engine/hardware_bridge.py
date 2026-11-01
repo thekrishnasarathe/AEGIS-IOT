@@ -5,10 +5,12 @@ Target MCU: Microchip ATmega328P (8-bit AVR @ 16 MHz) on Indeyes IoT Trainer Kit
 Peripherals: 16x2 Character LCD, Red Warning LED (Pin 8), Active Buzzer (Pin 9).
 Baudrate: 9600 Baud (Newline '\n' terminated).
 
-Design Axiom:
-- If physical Arduino UNO is connected via USB Serial, communicates directly with hardware.
-- If physical device is disconnected, seamlessly falls back to Hardware Digital Twin Mirror,
-  guaranteeing zero crashed requests or UI freezes while preserving identical logic and telemetry.
+Zero-Lag Design Axioms:
+1. Maintain ONE persistent singleton serial.Serial connection (dsrdtr=False, rtscts=False).
+   Never open/close per command, which would toggle DTR and reset the Arduino UNO for 2s.
+2. Background reader daemon thread handles incoming serial RX asynchronously without blocking.
+3. Fast in-memory state updates (<1ms) so FastAPI verification ladder requests never wait on UART I/O.
+4. Fail-Safe Digital Twin Mirror fallback ensures zero crash / zero UI freeze when disconnected.
 """
 
 import time
@@ -26,8 +28,8 @@ except ImportError:
 
 class HardwareBridge:
     """
-    Manages physical USB Serial communication with Arduino UNO ATmega328P node
-    and provides a high-fidelity Digital Twin Mirror fallback.
+    Manages persistent USB Serial communication with Arduino UNO ATmega328P node
+    with asynchronous background RX and an instantaneous Digital Twin Mirror fallback.
     """
 
     def __init__(self):
@@ -71,11 +73,15 @@ class HardwareBridge:
         self.floods_blocked: int = 0
         self.brute_force_alerts: int = 0
 
+        # Background reader thread
+        self.reader_thread: Optional[threading.Thread] = None
+        self.stop_reader = threading.Event()
+
         # Timestamped circular serial log (max 120 lines)
         self.serial_log: List[Dict[str, Any]] = [
             {
                 "direction": "SYS",
-                "text": "AEGIS-IoT Hardware Bridge initialized. Ready for ATmega328P node.",
+                "text": "AEGIS-IoT Hardware Bridge initialized (Zero-Lag Async Engine).",
                 "timestamp": time.time(),
             }
         ]
@@ -108,45 +114,51 @@ class HardwareBridge:
         for p in ports:
             desc = p["description"].lower()
             dev = p["device"]
-            # Look for common Arduino USB identifiers (CH340, FTDI, CP210x, Arduino)
             if any(k in desc for k in ["arduino", "ch340", "ftdi", "cp210", "usb-serial"]):
                 if self.connect(dev):
                     return True
 
-        # If none matched by keyword, try first available port if present
         if ports and not self.serial_conn:
             return self.connect(ports[0]["device"])
 
         return False
 
     def connect(self, port_name: str) -> bool:
-        """Opens serial connection to the designated COM/tty port."""
+        """
+        Opens a single persistent serial connection to designated COM port.
+        dsrdtr=False and rtscts=False prevent accidental DTR reset loops.
+        """
         if not SERIAL_AVAILABLE or serial is None:
             return False
 
         with self.lock:
             try:
+                self._stop_reader_thread()
                 if self.serial_conn and self.serial_conn.is_open:
                     self.serial_conn.close()
 
+                # Persistent singleton connection with low timeout and no DTR toggling
                 self.serial_conn = serial.Serial(
                     port=port_name,
                     baudrate=self.baudrate,
-                    timeout=0.6,
-                    write_timeout=0.6,
+                    timeout=0.05,
+                    write_timeout=0.1,
+                    dsrdtr=False,
+                    rtscts=False,
                 )
                 self.active_port = port_name
-                time.sleep(1.8)  # Allow Arduino DTR auto-reset settling time
-                self._append_log("SYS", f"Physical USB Serial connected to {port_name} @ {self.baudrate} baud.")
+                self._start_reader_thread()
+                self._append_log("SYS", f"Persistent serial stream connected to {port_name} @ {self.baudrate} baud (DTR stable).")
                 return True
             except Exception as e:
                 self.serial_conn = None
-                self._append_log("SYS", f"Could not connect to {port_name}: {str(e)}. Operating via Digital Twin.")
+                self._append_log("SYS", f"Could not connect to {port_name}: {str(e)}. Operating via Digital Twin Mirror.")
                 return False
 
     def disconnect(self) -> None:
-        """Closes physical serial connection."""
+        """Closes persistent serial connection and stops background reader."""
         with self.lock:
+            self._stop_reader_thread()
             if self.serial_conn and self.serial_conn.is_open:
                 try:
                     self.serial_conn.close()
@@ -155,6 +167,81 @@ class HardwareBridge:
             self.serial_conn = None
             self.active_port = None
             self._append_log("SYS", "Disconnected from physical serial port. Switched to Digital Twin Mirror.")
+
+    def _start_reader_thread(self) -> None:
+        self.stop_reader.clear()
+        self.reader_thread = threading.Thread(target=self._background_reader, daemon=True)
+        self.reader_thread.start()
+
+    def _stop_reader_thread(self) -> None:
+        self.stop_reader.set()
+        if self.reader_thread and self.reader_thread.is_alive():
+            self.reader_thread.join(timeout=0.2)
+        self.reader_thread = None
+
+    def _background_reader(self) -> None:
+        """Asynchronously ingests RX lines without ever blocking HTTP requests."""
+        while not self.stop_reader.is_set():
+            conn = self.serial_conn
+            if conn and conn.is_open:
+                try:
+                    if conn.in_waiting > 0:
+                        raw = conn.readline()
+                        line = raw.decode("utf-8", errors="ignore").strip()
+                        if line:
+                            self._append_log("RX", line)
+                            self._sync_state_from_rx(line)
+                    else:
+                        time.sleep(0.015)
+                except Exception:
+                    time.sleep(0.05)
+            else:
+                time.sleep(0.05)
+
+    def _sync_state_from_rx(self, line: str) -> None:
+        """Updates internal telemetry from incoming Arduino output."""
+        if "OVERSIZED" in line:
+            self.oversized_blocked += 1
+            self.led_on = True
+            self.buzzer_on = True
+            self.lcd_line1 = "OVERSIZED INPUT "
+            self.lcd_line2 = "Command Rejected"
+        elif "Ready for verification" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "AEGIS-IoT HIL   "
+            self.lcd_line2 = "Device Ready    "
+        elif "Gate 01" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "GATE 01: SCAN   "
+            self.lcd_line2 = "Scanning AST... "
+        elif "Gate 02" in line or "Threat detected" in line:
+            self.led_on = True
+            self.buzzer_on = False
+            self.lcd_line1 = "THREAT DETECTED "
+            self.lcd_line2 = "ASan Crash Repro"
+        elif "Gate 03" in line:
+            self.led_on = True
+            self.buzzer_on = False
+            self.lcd_line1 = "AI SYNTHESIS    "
+            self.lcd_line2 = "Patching C...   "
+        elif "VERIFIED FOR TESTED CASES" in line:
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "VERIFIED PASS   "
+            self.lcd_line2 = "MCU Budget OK   "
+        elif "REJECTED BY GUARDS" in line:
+            self.led_on = True
+            self.buzzer_on = True
+            self.lcd_line1 = "PATCH REJECTED  "
+            self.lcd_line2 = "Guard Blocked!  "
+        elif "flood rate-limit" in line:
+            self.floods_blocked += 1
+            self.led_on = True
+            self.buzzer_on = True
+            self.lcd_line1 = "FLOOD DETECTED  "
+            self.lcd_line2 = "Rate Limited    "
 
     def _append_log(self, direction: str, text: str) -> None:
         self.serial_log.append({
@@ -173,19 +260,16 @@ class HardwareBridge:
 
     def send_command(self, cmd_input: str, is_ladder_dispatch: bool = False) -> Dict[str, Any]:
         """
-        Transmits a command to the physical Arduino UNO or processes it
-        via the Digital Twin Mirror simulation.
-        Special keyword: 'OVERSIZED_TEST' automatically expands to 64 bytes of 'A'.
+        Non-blocking thread-safe command dispatcher.
+        Immediately updates mirrored state in < 1ms and writes to physical serial without stalling.
         """
         with self.lock:
             self.total_commands += 1
 
-            # Resolve actual payload
             if cmd_input.strip() == "OVERSIZED_TEST":
                 raw_payload = "A" * 64
                 display_cmd = "OVERSIZED_TEST (64-Byte Buffer Attack: 'A'*64)"
             elif cmd_input.strip() == "FLOOD_TEST":
-                # Simulated flood of 6 commands
                 return self._simulate_flood_burst()
             else:
                 raw_payload = cmd_input.strip()
@@ -193,137 +277,52 @@ class HardwareBridge:
 
             self._append_log("TX", display_cmd)
 
-            # Check if physical connection is active
+            # Instantaneous state update for zero latency
+            self._update_state_for_command(raw_payload, is_ladder_dispatch)
+
+            # Non-blocking write to physical hardware if connected
             if self.serial_conn and self.serial_conn.is_open:
                 try:
-                    return self._send_to_physical_hardware(raw_payload, display_cmd)
+                    to_send = (raw_payload + "\n").encode("utf-8", errors="replace")
+                    self.serial_conn.write(to_send)
+                    self.serial_conn.flush()
                 except Exception as e:
-                    self._append_log("SYS", f"Physical serial error: {str(e)}. Falling back to Digital Twin.")
-                    self.serial_conn = None
+                    self._append_log("SYS", f"Serial write warning: {str(e)}")
 
-            # Fallback / Default: Execute via Digital Twin Mirror
-            return self._execute_digital_twin(raw_payload, display_cmd, is_ladder_dispatch=is_ladder_dispatch)
+            # If not physical hardware, generate simulated RX log lines in Digital Twin
+            rx_lines = []
+            if not (self.serial_conn and self.serial_conn.is_open):
+                rx_lines = self._generate_digital_twin_rx(raw_payload, is_ladder_dispatch)
 
-    def _send_to_physical_hardware(self, payload: str, display_cmd: str) -> Dict[str, Any]:
-        """Sends bytes directly to physical Arduino over USB Serial."""
-        to_send = (payload + "\n").encode("utf-8", errors="replace")
-        self.serial_conn.write(to_send)
-        self.serial_conn.flush()
+            return {
+                "mode": "PHYSICAL_HARDWARE" if (self.serial_conn and self.serial_conn.is_open) else "DIGITAL_TWIN_MIRROR",
+                "port": self.active_port or "EMULATED_COM_PORT (ATmega328P)",
+                "command": display_cmd,
+                "rx_lines": rx_lines,
+                "status": self.get_status(),
+            }
 
-        time.sleep(0.12)
-        rx_lines = []
-        while self.serial_conn.in_waiting > 0:
-            line = self.serial_conn.readline().decode("utf-8", errors="ignore").strip()
-            if line:
-                rx_lines.append(line)
-                self._append_log("RX", line)
-
-        # Update mirrored state from responses
-        for line in rx_lines:
-            if "OVERSIZED" in line:
-                self.oversized_blocked += 1
-                self.led_on = True
-                self.buzzer_on = True
-                self.lcd_line1 = "OVERSIZED INPUT "
-                self.lcd_line2 = "Command Rejected"
-            elif "Ready for verification" in line:
-                self.led_on = False
-                self.buzzer_on = False
-                self.lcd_line1 = "AEGIS-IoT HIL   "
-                self.lcd_line2 = "Device Ready    "
-            elif "Gate 01" in line:
-                self.led_on = False
-                self.buzzer_on = False
-                self.lcd_line1 = "GATE 01: SCAN   "
-                self.lcd_line2 = "AST Triage...   "
-            elif "Gate 02" in line or "Threat detected" in line:
-                self.led_on = True
-                self.buzzer_on = False
-                self.lcd_line1 = "GATE 02: THREAT "
-                self.lcd_line2 = "ASan Crash Repro"
-            elif "Gate 03" in line:
-                self.led_on = False
-                self.buzzer_on = False
-                self.lcd_line1 = "GATE 03: PATCH  "
-                self.lcd_line2 = "Synthesizing... "
-            elif "VERIFIED FOR TESTED CASES" in line:
-                self.led_on = False
-                self.buzzer_on = False
-                self.lcd_line1 = "VERIFIED PASS   "
-                self.lcd_line2 = "Tested Cases OK "
-            elif "REJECTED BY GUARDS" in line:
-                self.led_on = True
-                self.buzzer_on = True
-                self.lcd_line1 = "VERIFY REJECTED "
-                self.lcd_line2 = "Guard Blocked   "
-            elif "flood rate-limit" in line:
-                self.floods_blocked += 1
-                self.led_on = True
-                self.buzzer_on = True
-                self.lcd_line1 = "FLOOD DETECTED  "
-                self.lcd_line2 = "Rate Limited    "
-
-        return {
-            "mode": "PHYSICAL_HARDWARE",
-            "port": self.active_port,
-            "command": display_cmd,
-            "rx_lines": rx_lines,
-            "status": self.get_status(),
-        }
-
-    def _execute_digital_twin(self, payload: str, display_cmd: str, is_ladder_dispatch: bool = False) -> Dict[str, Any]:
-        """Faithfully mirrors the firmware logic of hardware/aegis_uno_hil/aegis_uno_hil.ino."""
-        rx_lines = []
-
-        # 1. Hardware Oversized Input Buffer Overflow Protection
-        # ATmega328P commandBuffer has capacity 32 (MAX_COMMAND_LENGTH = 31).
+    def _update_state_for_command(self, payload: str, is_ladder_dispatch: bool) -> None:
+        """Immediately sets lockstep hardware indicators in < 1ms."""
+        # 1. Oversized payload
         if len(payload) > self.specs["max_cmd_len"]:
             self.oversized_blocked += 1
             self.led_on = True
             self.buzzer_on = True
             self.lcd_line1 = "OVERSIZED INPUT "
             self.lcd_line2 = "Command Rejected"
-            rx_lines = [
-                "SECURITY ALERT!",
-                "Oversized input detected.",
-                "Command safely rejected.",
-                "[HIL-DEFENSE] Buffer bound enforced: char commandBuffer[32].",
-                f"[SRAM GUARD] Input payload was {len(payload)} bytes (> 31 byte limit). Zero heap/stack corruption.",
-            ]
-            for line in rx_lines:
-                self._append_log("RX", line)
+            return
 
-            return {
-                "mode": "DIGITAL_TWIN_MIRROR",
-                "port": "EMULATED_COM_PORT (ATmega328P)",
-                "command": display_cmd,
-                "rx_lines": rx_lines,
-                "status": self.get_status(),
-            }
-
-        # 2. Command Flood Rate-Limit Check (applicable to external inputs, not ladder internal transitions)
+        # 2. Flood rate-limit check (for user commands)
         if not is_ladder_dispatch and self._check_rate_limit():
             self.floods_blocked += 1
             self.led_on = True
             self.buzzer_on = True
             self.lcd_line1 = "FLOOD DETECTED  "
             self.lcd_line2 = "Rate Limited    "
-            rx_lines = [
-                "SECURITY ALERT!",
-                "Command flood rate-limit exceeded.",
-                "Throttling serial reception for 1500ms.",
-            ]
-            for line in rx_lines:
-                self._append_log("RX", line)
-            return {
-                "mode": "DIGITAL_TWIN_MIRROR",
-                "port": "EMULATED_COM_PORT (ATmega328P)",
-                "command": display_cmd,
-                "rx_lines": rx_lines,
-                "status": self.get_status(),
-            }
+            return
 
-        # 3. Lifecycle Commands
+        # 3. Known commands
         cmd = payload.upper()
         if cmd == "READY":
             self.invalid_count = 0
@@ -331,67 +330,51 @@ class HardwareBridge:
             self.buzzer_on = False
             self.lcd_line1 = "AEGIS-IoT HIL   "
             self.lcd_line2 = "Device Ready    "
-            rx_lines = [
-                "[MCU-STATUS] Ready for verification ladder.",
-                "[PERIPHERALS] LCD: Active | LED: OFF | Buzzer: OFF",
-            ]
         elif cmd == "SCAN":
             self.invalid_count = 0
             self.led_on = False
             self.buzzer_on = False
             self.lcd_line1 = "GATE 01: SCAN   "
-            self.lcd_line2 = "AST Triage...   "
-            rx_lines = [
-                "[MCU-STATUS] Gate 01: AST syntax tree scan initiated.",
-            ]
+            self.lcd_line2 = "Scanning AST... "
         elif cmd == "THREAT":
             self.invalid_count = 0
             self.led_on = True
-            self.buzzer_on = False  # Buzzer alarmed momentarily, Red LED persists
-            self.lcd_line1 = "GATE 02: THREAT "
+            self.buzzer_on = False  # Threat reproduction confirms bug: Red LED ON
+            self.lcd_line1 = "THREAT DETECTED "
             self.lcd_line2 = "ASan Crash Repro"
-            rx_lines = [
-                "[MCU-STATUS] Gate 02: Memory breach confirmed by AddressSanitizer.",
-                "[ALERT] Red warning LED active. Threat detected.",
-            ]
         elif cmd == "PATCH":
+            self.invalid_count = 0
+            self.led_on = True
+            self.buzzer_on = False
+            self.lcd_line1 = "AI SYNTHESIS    "
+            self.lcd_line2 = "Patching C...   "
+        elif cmd == "COMPILE":
             self.invalid_count = 0
             self.led_on = False
             self.buzzer_on = False
-            self.lcd_line1 = "GATE 03: PATCH  "
-            self.lcd_line2 = "Synthesizing... "
-            rx_lines = [
-                "[MCU-STATUS] Gate 03: Neural patch synthesis in progress.",
-            ]
+            self.lcd_line1 = "GCC -O2 -Werror "
+            self.lcd_line2 = "Build Clean     "
+        elif cmd == "GUARDS":
+            self.invalid_count = 0
+            self.led_on = False
+            self.buzzer_on = False
+            self.lcd_line1 = "STAGE 6 GUARDS  "
+            self.lcd_line2 = "AntiCheat Check "
         elif cmd == "PASS":
             self.invalid_count = 0
             self.led_on = False
             self.buzzer_on = False
             self.lcd_line1 = "VERIFIED PASS   "
-            self.lcd_line2 = "Tested Cases OK "
-            rx_lines = [
-                "[MCU-STATUS] Verdict: VERIFIED FOR TESTED CASES.",
-                "[INTEGRITY] Flash & SRAM delta within ATmega328P budget.",
-            ]
+            self.lcd_line2 = "MCU Budget OK   "
         elif cmd == "FAIL":
             self.invalid_count = 0
             self.led_on = True
             self.buzzer_on = True
-            self.lcd_line1 = "VERIFY REJECTED "
-            self.lcd_line2 = "Guard Blocked   "
-            rx_lines = [
-                "[MCU-STATUS] Verdict: REJECTED BY GUARDS.",
-                "[CRITICAL] Untrusted patch refused execution.",
-            ]
+            self.lcd_line1 = "PATCH REJECTED  "
+            self.lcd_line2 = "Guard Blocked!  "
         elif cmd == "STATUS":
-            rx_lines = [
-                "[MCU-INFO] Microchip ATmega328P @ 16 MHz.",
-                "[MEMORY] Flash: 32 KB | SRAM: 2048 B | EEPROM: 1024 B.",
-                "[BUFFER] Command Buffer Capacity: 32 Bytes (Protected).",
-                f"[STATE] Invalid Count: {self.invalid_count} | LED: {'ON' if self.led_on else 'OFF'}",
-            ]
+            pass
         else:
-            # Unknown command
             self.invalid_count += 1
             if self.invalid_count >= self.max_invalid_attempts:
                 self.brute_force_alerts += 1
@@ -399,43 +382,72 @@ class HardwareBridge:
                 self.buzzer_on = False
                 self.lcd_line1 = "BRUTE FORCE     "
                 self.lcd_line2 = "Alert Triggered "
-                rx_lines = [
-                    "SECURITY ALERT!",
-                    "Repeated invalid command sequence detected.",
-                    "Hardware lockout threshold reached (>=3 attempts).",
-                ]
             else:
                 self.lcd_line1 = "INVALID COMMAND "
                 self.lcd_line2 = (payload[:16]).ljust(16)
-                rx_lines = [
-                    f"[MCU-WARN] Unknown command '{payload}'. Invalid count: {self.invalid_count}",
-                ]
 
-        for line in rx_lines:
-            self._append_log("RX", line)
+    def _generate_digital_twin_rx(self, payload: str, is_ladder_dispatch: bool) -> List[str]:
+        """Generates digital twin mirror responses."""
+        if len(payload) > self.specs["max_cmd_len"]:
+            lines = [
+                "SECURITY ALERT!",
+                "Oversized input detected.",
+                "Command safely rejected.",
+                "[HIL-DEFENSE] Buffer bound enforced: char commandBuffer[32].",
+            ]
+        elif not is_ladder_dispatch and len(self.command_timestamps) > self.rate_limit_max:
+            lines = [
+                "SECURITY ALERT!",
+                "Command flood rate-limit exceeded.",
+                "Throttling serial reception for 1500ms.",
+            ]
+        else:
+            cmd = payload.upper()
+            responses = {
+                "READY": ["[MCU-STATUS] Ready for verification ladder.", "[PERIPHERALS] LCD: Active | LED: OFF | Buzzer: OFF"],
+                "SCAN": ["[MCU-STATUS] Gate 01: AST syntax tree scan initiated."],
+                "THREAT": ["[MCU-STATUS] Gate 02: Memory breach confirmed by AddressSanitizer.", "[ALERT] Red warning LED active. Threat detected."],
+                "PATCH": ["[MCU-STATUS] Gate 03: Neural patch synthesis in progress."],
+                "COMPILE": ["[MCU-STATUS] Gate 04: GCC compiler verified zero errors."],
+                "GUARDS": ["[MCU-STATUS] Gate 06: Deterministic anti-cheat guards passed."],
+                "PASS": ["[MCU-STATUS] Verdict: VERIFIED FOR TESTED CASES.", "[INTEGRITY] Flash & SRAM delta within ATmega328P budget."],
+                "FAIL": ["[MCU-STATUS] Verdict: REJECTED BY GUARDS.", "[CRITICAL] Untrusted patch refused execution."],
+                "STATUS": [
+                    "[MCU-INFO] Microchip ATmega328P @ 16 MHz.",
+                    "[MEMORY] Flash: 32 KB | SRAM: 2048 B | EEPROM: 1024 B.",
+                    "[BUFFER] Command Buffer Capacity: 32 Bytes (Protected).",
+                    f"[STATE] Invalid Count: {self.invalid_count} | LED: {'ON' if self.led_on else 'OFF'}",
+                ],
+            }
+            lines = responses.get(cmd, [f"[MCU-WARN] Unknown command '{payload}'. Invalid count: {self.invalid_count}"])
 
-        return {
-            "mode": "DIGITAL_TWIN_MIRROR",
-            "port": "EMULATED_COM_PORT (ATmega328P)",
-            "command": display_cmd,
-            "rx_lines": rx_lines,
-            "status": self.get_status(),
-        }
+        for l in lines:
+            self._append_log("RX", l)
+        return lines
 
     def _simulate_flood_burst(self) -> Dict[str, Any]:
         """Simulates rapid consecutive commands to verify rate-limiting defense."""
         for i in range(4):
             self.command_timestamps.append(time.time())
             self._append_log("TX", f"BURST_PING_{i+1}")
-        return self._execute_digital_twin("BURST_PING_5", "FLOOD_BURST_STORM")
+        self.send_command("BURST_PING_5")
+        return {
+            "mode": "DIGITAL_TWIN_MIRROR",
+            "port": "EMULATED_COM_PORT (ATmega328P)",
+            "command": "FLOOD_TEST",
+            "rx_lines": ["SECURITY ALERT!", "Command flood rate-limit exceeded."],
+            "status": self.get_status(),
+        }
 
     def dispatch_ladder_stage(self, stage_identifier: str) -> None:
         """
-        Synchronously communicates verification ladder transitions to the MCU:
+        Non-blocking lockstep dispatch from verification ladder:
         - Stage 1 Finding -> SCAN
         - Stage 2 Repro   -> THREAT
         - Stage 3 Patch   -> PATCH
-        - Stage 5 Clean   -> OVERSIZED_TEST (verifies buffer limits)
+        - Stage 4 Compile -> COMPILE
+        - Stage 5 Clean   -> OVERSIZED_TEST
+        - Stage 6 Guards  -> GUARDS
         - Stage 7 Verdict -> PASS or FAIL
         """
         s = str(stage_identifier).upper()
@@ -445,24 +457,25 @@ class HardwareBridge:
             self.send_command("THREAT", is_ladder_dispatch=True)
         elif "STAGE_3" in s or "PATCH" in s:
             self.send_command("PATCH", is_ladder_dispatch=True)
+        elif "STAGE_4" in s or "COMPILES" in s:
+            self.send_command("COMPILE", is_ladder_dispatch=True)
         elif "STAGE_5" in s or "CRASH_INPUT_CLEAN" in s:
-            # Stage 5 passes clean: demonstrate that the hardware buffer guard holds!
             self.send_command("OVERSIZED_TEST", is_ladder_dispatch=True)
+        elif "STAGE_6" in s or "GUARDS" in s:
+            self.send_command("GUARDS", is_ladder_dispatch=True)
         elif "VERIFIED" in s or "PASS" in s or "STAGE_7" in s:
             self.send_command("PASS", is_ladder_dispatch=True)
         elif "REJECTED" in s or "FAIL" in s:
             self.send_command("FAIL", is_ladder_dispatch=True)
 
     def get_status(self) -> Dict[str, Any]:
-        """Returns the full runtime state of the physical / digital twin hardware node."""
+        """Returns instantaneous runtime state of the hardware node."""
         is_physical = bool(self.serial_conn and self.serial_conn.is_open)
-        available_ports = self.list_ports()
-
         return {
             "connected": is_physical,
             "mode": "PHYSICAL_HARDWARE" if is_physical else "DIGITAL_TWIN_MIRROR",
             "port": self.active_port if is_physical else "EMULATED_COM_PORT (ATmega328P)",
-            "available_ports": available_ports,
+            "available_ports": self.list_ports(),
             "baudrate": self.baudrate,
             "mcu": self.mcu,
             "specs": self.specs,

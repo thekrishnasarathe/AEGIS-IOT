@@ -7,6 +7,7 @@ import ActionsTabView from './components/github/ActionsTabView';
 import SecurityTabView from './components/github/SecurityTabView';
 import BenchmarkTabView from './components/github/BenchmarkTabView';
 import FileUploadModal from './components/github/FileUploadModal';
+import HardwareHILStation from './components/verification/HardwareHILStation';
 
 export default function App() {
   const [samples, setSamples] = useState([]);
@@ -17,8 +18,8 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
-  // Active GitHub Tab: 'code' | 'actions' | 'security' | 'benchmark'
-  const [activeGitHubTab, setActiveGitHubTab] = useState('code');
+  // Active GitHub Tab: 'actions' | 'code' | 'security' | 'benchmark' | 'hardware'
+  const [activeGitHubTab, setActiveGitHubTab] = useState('actions');
 
   const pollIntervalRef = useRef(null);
 
@@ -87,7 +88,7 @@ export default function App() {
 
       const runId = initialRun.run_id;
 
-      // Start 400ms Live Telemetry Polling Loop
+      // Start 250ms Live Telemetry Polling Loop (Zero-Lag Lockstep Sync)
       pollIntervalRef.current = setInterval(async () => {
         try {
           const pollRes = await fetch(`/api/runs/${runId}`);
@@ -104,7 +105,7 @@ export default function App() {
         } catch (err) {
           console.error('Polling error:', err);
         }
-      }, 400);
+      }, 250);
     } catch (err) {
       console.error('Run initialization error:', err);
       setIsRunning(false);
@@ -135,7 +136,7 @@ export default function App() {
           } catch (e) {
             console.error('Upload poll error:', e);
           }
-        }, 400);
+        }, 250);
       }
     }
   };
@@ -225,6 +226,13 @@ export default function App() {
             onExportPatch={handleExportPatch}
             onExportMarkdown={handleExportMarkdown}
           />
+        )}
+
+        {/* Tab 5: Hardware HIL Console */}
+        {activeGitHubTab === 'hardware' && (
+          <div className="space-y-4">
+            <HardwareHILStation runState={runState} />
+          </div>
         )}
       </main>
 

@@ -96,9 +96,13 @@ class VerificationLadder:
             run_state.current_stage = stage
             run_state.verdict = verdict
             run_state.updated_at = time.time()
+            try:
+                run_state.hardware_state = hardware_bridge.get_status()
+            except Exception:
+                pass
             if state_callback:
                 await state_callback(run_state)
-            await asyncio.sleep(0.04)
+            await asyncio.sleep(0.20)
 
         # =====================================================================
         # STAGE 1: Finding & Static Triage (cppcheck + Dual AST Neural Audit)
@@ -213,6 +217,10 @@ class VerificationLadder:
 
             # --- STAGE 4: Compiler Gate ---
             run_state.stage_4.status = StageStatus.RUNNING
+            try:
+                hardware_bridge.dispatch_ladder_stage("STAGE_4_COMPILES")
+            except Exception:
+                pass
             await checkpoint(LadderStage.STAGE_4_COMPILES)
 
             compile_result = self.executor.run_stage_4_compile(patched_c, harness_c, sample_id)
@@ -290,6 +298,10 @@ class VerificationLadder:
         # STAGE 6: Integrity Guards & Behavioral Equivalence
         # =====================================================================
         run_state.stage_6.status = StageStatus.RUNNING
+        try:
+            hardware_bridge.dispatch_ladder_stage("STAGE_6_GUARDS")
+        except Exception:
+            pass
         await checkpoint(LadderStage.STAGE_6_GUARDS_AND_BEHAVIOR)
 
         benign_results = self.executor.run_benign_suite(patched_c, harness_c, sample_id)

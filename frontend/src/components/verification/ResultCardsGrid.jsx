@@ -66,8 +66,8 @@ export default function ResultCardsGrid({ runState, sampleDetail }) {
 
   return (
     <div className="space-y-4 font-sans">
-      {/* Grid of 4 Executive Intelligence Cards with Minecraft & Lego Voxel Styling */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Grid of 4 Executive Intelligence Cards in Clean 4-Column Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* CARD A: HEURISTIC SECURITY SCORE GAUGE */}
         <div className="voxel-card lego-studs p-5 rounded-lg flex flex-col justify-between">
           <div>

@@ -10,6 +10,7 @@ import {
   RotateCw,
   Upload,
   Zap,
+  Cpu,
 } from 'lucide-react';
 
 export default function GitHubTabs({ activeTab, onSelectTab, runState, isRunning }) {
@@ -47,6 +48,15 @@ export default function GitHubTabs({ activeTab, onSelectTab, runState, isRunning
       icon: BarChart2,
       badge: '9 Cases',
       badgeColor: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40',
+    },
+    {
+      id: 'hardware',
+      label: '🔌 Hardware HIL Console',
+      icon: Cpu,
+      badge: runState?.hardware_state?.connected ? 'COM ACTIVE' : 'DIGITAL TWIN',
+      badgeColor: runState?.hardware_state?.connected
+        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
     },
   ];
 

@@ -174,6 +174,7 @@ class RunState(BaseModel):
     hacker_impact_card: Optional[Dict[str, Any]] = None
     time_saved_card: Optional[Dict[str, Any]] = None
     firmware_budget_guard: Optional[Dict[str, Any]] = None
+    hardware_state: Optional[Dict[str, Any]] = None
     created_at: float
     updated_at: float
 
