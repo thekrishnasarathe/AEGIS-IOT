@@ -1,5 +1,6 @@
 // filepath: frontend/src/App.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { apiUrl } from './api/config';
 import GitHubTopNav from './components/github/GitHubTopNav';
 import GitHubTabs from './components/github/GitHubTabs';
 import CodeTabView from './components/github/CodeTabView';
@@ -25,7 +26,7 @@ export default function App() {
 
   // Load samples on mount and auto-trigger verification run on initial sample
   useEffect(() => {
-    fetch('/api/samples')
+    fetch(apiUrl('/api/samples'))
       .then((res) => res.json())
       .then((data) => {
         setSamples(data);
@@ -45,7 +46,7 @@ export default function App() {
   const loadSampleDetail = async (sampleId, autoRun = false) => {
     setSelectedSampleId(sampleId);
     try {
-      const res = await fetch(`/api/samples/${sampleId}`);
+      const res = await fetch(apiUrl(`/api/samples/${sampleId}`));
       if (res.ok) {
         const data = await res.json();
         setSampleDetail(data);
@@ -69,7 +70,7 @@ export default function App() {
     setIsRunning(true);
 
     try {
-      const res = await fetch('/api/runs', {
+      const res = await fetch(apiUrl('/api/runs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -91,7 +92,7 @@ export default function App() {
       // Start 250ms Live Telemetry Polling Loop (Zero-Lag Lockstep Sync)
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const pollRes = await fetch(`/api/runs/${runId}`);
+          const pollRes = await fetch(apiUrl(`/api/runs/${runId}`));
           if (pollRes.ok) {
             const current = await pollRes.json();
             setRunState(current);
@@ -124,7 +125,7 @@ export default function App() {
         setIsRunning(true);
         pollIntervalRef.current = setInterval(async () => {
           try {
-            const pollRes = await fetch(`/api/runs/${first.run_id}`);
+            const pollRes = await fetch(apiUrl(`/api/runs/${first.run_id}`));
             if (pollRes.ok) {
               const current = await pollRes.json();
               setRunState(current);
@@ -151,12 +152,12 @@ export default function App() {
 
   const handleExportPatch = () => {
     if (!runState?.run_id) return;
-    window.location.href = `/api/runs/${runState.run_id}/export?format=patch`;
+    window.location.href = apiUrl(`/api/runs/${runState.run_id}/export?format=patch`);
   };
 
   const handleExportMarkdown = () => {
     if (!runState?.run_id) return;
-    window.location.href = `/api/runs/${runState.run_id}/export?format=md`;
+    window.location.href = apiUrl(`/api/runs/${runState.run_id}/export?format=md`);
   };
 
   return (

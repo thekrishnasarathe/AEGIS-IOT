@@ -46,10 +46,22 @@ app = FastAPI(
     description="Evidence-gated C firmware vulnerability repair and deterministic verification workbench.",
 )
 
-# Enable CORS for frontend workbench
+# Enable CORS for frontend workbench (local dev + deployed Vercel origins)
+frontend_url = os.getenv("FRONTEND_URL", "").strip()
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+if frontend_url:
+    allowed_origins.append(frontend_url)
+    allowed_origins.append(frontend_url.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"] if not frontend_url else allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app" if not frontend_url else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,6 +92,16 @@ def root():
         "version": settings.VERSION,
         "axiom": "The model proposes. Deterministic tools decide.",
         "status": "OPERATIONAL",
+    }
+
+
+@app.get("/health")
+@app.get(f"{settings.API_PREFIX}/health")
+def health():
+    return {
+        "status": "ok",
+        "service": settings.PROJECT_NAME,
+        "version": settings.VERSION,
     }
 
 

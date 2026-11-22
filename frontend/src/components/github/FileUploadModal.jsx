@@ -1,5 +1,6 @@
 // filepath: frontend/src/components/github/FileUploadModal.jsx
 import React, { useState, useRef } from 'react';
+import { apiUrl } from '../../api/config';
 import {
   Upload,
   FolderUp,
@@ -100,7 +101,7 @@ void process_data(const char *in) {
         };
       }
 
-      const res = await fetch('/api/upload-and-repair', {
+      const res = await fetch(apiUrl('/api/upload-and-repair'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

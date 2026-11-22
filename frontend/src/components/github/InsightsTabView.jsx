@@ -1,5 +1,6 @@
 // filepath: frontend/src/components/github/InsightsTabView.jsx
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../../api/config';
 import {
   Cpu,
   HardDrive,
@@ -35,7 +36,7 @@ export default function InsightsTabView({ runState, onExportPatch, onExportMarkd
 
   const fetchBenchmark = async () => {
     try {
-      const res = await fetch('/api/bench');
+      const res = await fetch(apiUrl('/api/bench'));
       if (res.ok) {
         const data = await res.json();
         setBenchData(data);
@@ -48,7 +49,7 @@ export default function InsightsTabView({ runState, onExportPatch, onExportMarkd
   const runBenchmarkSuite = async () => {
     setIsRunningBench(true);
     try {
-      const res = await fetch('/api/bench/run', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/bench/run'), { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setBenchData(data);

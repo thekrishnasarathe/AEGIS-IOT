@@ -7,7 +7,11 @@ Verifies all 7 endpoints with live concurrency.
 import sys
 import os
 import asyncio
+import functools
 import httpx
+
+# Ensure unbuffered print
+print = functools.partial(print, flush=True)
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -29,6 +33,17 @@ async def test_api_suite_async():
         data = res.json()
         assert data["status"] == "OPERATIONAL"
         print(f"  -> OK: {data['axiom']}")
+
+        # 1.1 Health Check (Production SLA)
+        print("\n[TEST 1.1] GET /health & GET /api/health ...")
+        h_res = await client.get("/health")
+        assert h_res.status_code == 200
+        h_data = h_res.json()
+        assert h_data["status"] == "ok"
+        api_h_res = await client.get("/api/health")
+        assert api_h_res.status_code == 200
+        assert api_h_res.json()["status"] == "ok"
+        print(f"  -> Health OK: {h_data['status']} (Service: {h_data['service']}, v{h_data['version']})")
 
         # 2. Samples list
         print("\n[TEST 2] GET /api/samples ...")

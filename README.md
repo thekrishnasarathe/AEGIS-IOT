@@ -215,14 +215,70 @@ AEGIS-IoT features a physical **Hardware-in-the-Loop (HIL)** microcontroller ver
 
 ---
 
-## 10. Quickstart & Verification Suite
+## 10. Live Cloud Deployment ($0 Free Tier)
 
-### Launch Workbench Dev Server
+AEGIS-IoT is engineered to deploy seamlessly on 100% free-tier cloud infrastructure with zero credit card required:
+- **Backend Orchestrator:** Render or Railway (FastAPI + Uvicorn Web Service, 512 MB RAM footprint is $< 60\text{ MB}$).
+- **Frontend Workbench:** Vercel (React 18 + Vite SPA, edge-cached with SPA rewrites).
+
+### Step-by-Step 5-Minute Free-Tier Deployment
+
+#### Step 1: Deploy Backend to Render (Free Web Service)
+1. Fork or push this repository to GitHub.
+2. Sign in to [Render](https://render.com) and click **New +** $\rightarrow$ **Web Service**.
+3. Connect your `AEGIS-IoT` GitHub repository.
+4. Set the following build and runtime configurations:
+   * **Root Directory:** `backend`
+   * **Environment:** `Python 3`
+   * **Build Command:** `pip install -r requirements.txt`
+   * **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   * **Plan Type:** `Free` ($0/mo)
+5. Under **Environment Variables**, add:
+   * `FRONTEND_URL`: (Optional initially, update after deploying frontend, e.g., `https://aegis-iot.vercel.app`)
+   * `GROQ_API_KEY`: `YOUR_GROQ_API_KEY` (Free at [console.groq.com](https://console.groq.com))
+   * `GEMINI_API_KEY`: (Optional) `YOUR_GEMINI_API_KEY`
+6. Click **Deploy Web Service**. Once live, note your backend URL (e.g., `https://aegis-backend.onrender.com`).
+   * Verify health at: `https://aegis-backend.onrender.com/health` $\rightarrow$ `{"status":"ok"}`.
+
+#### Step 2: Deploy Frontend to Vercel (Free Edge Static)
+1. Sign in to [Vercel](https://vercel.com) and click **Add New...** $\rightarrow$ **Project**.
+2. Import the `AEGIS-IoT` repository.
+3. Configure project settings:
+   * **Framework Preset:** `Vite`
+   * **Root Directory:** `frontend`
+   * **Build Command:** `npm run build`
+   * **Output Directory:** `dist`
+4. Under **Environment Variables**, add:
+   * `VITE_API_URL`: Your Render backend URL (e.g., `https://aegis-backend.onrender.com`, without trailing slash).
+5. Click **Deploy**. Vercel will build and launch the workbench at `https://your-project.vercel.app`.
+6. Return to Render and update `FRONTEND_URL` to your Vercel URL to restrict production CORS.
+
+---
+
+## 11. Environment Variables & Configuration
+
+All secrets and endpoints are managed strictly via environment variables (never committed to Git). Refer to [`.env.example`](.env.example):
+
+| Variable | Target Layer | Required? | Default / Description |
+|:---|:---|:---:|:---|
+| `VITE_API_URL` | Frontend (`frontend/`) | Optional | In local dev, defaults to `""` (proxied by Vite). In cloud production, set to your backend URL (e.g. `https://aegis-backend.onrender.com`). |
+| `FRONTEND_URL` | Backend (`backend/`) | Optional | Production frontend origin for strict CORS allowlisting. By default, `http://localhost:*` and `https://*.vercel.app` are always permitted. |
+| `PORT` | Backend (`backend/`) | Optional | HTTP port for Uvicorn (Render sets this dynamically, defaults to `8000` locally). |
+| `GROQ_API_KEY` | Backend (`backend/`) | Recommended | Fast Lane LLM synthesis (`qwen-2.5-coder-32b`, ~500ms). If absent, system fails over to Stage Insurance automatically. |
+| `GEMINI_API_KEY` | Backend (`backend/`) | Optional | Secondary multi-cloud failover LLM provider. |
+| `OPENROUTER_API_KEY` | Backend (`backend/`) | Optional | Tertiary cloud failover LLM provider. |
+| `OLLAMA_BASE_URL` | Backend (`backend/`) | Optional | Local offline failover URL (default: `http://127.0.0.1:11434`). |
+
+---
+
+## 12. Quickstart & Verification Suite
+
+### Launch Workbench Dev Server Locally
 ```bash
 python start_aegis.py
 ```
 - **React Workbench:** [`http://127.0.0.1:5173`](http://127.0.0.1:5173)
-- **FastAPI Backend:** [`http://127.0.0.1:8000`](http://127.0.0.1:8000) (Swagger Docs at [`/docs`](http://127.0.0.1:8000/docs))
+- **FastAPI Backend:** [`http://127.0.0.1:8000`](http://127.0.0.1:8000) (Swagger Docs at [`/docs`](http://127.0.0.1:8000/docs), Health check at [`/health`](http://127.0.0.1:8000/health))
 
 ### Run Test Suites
 ```bash
@@ -238,6 +294,13 @@ python backend/run_bench.py
 # 4. Frontend Production Build Check
 npm --prefix frontend run build
 ```
+
+### 2-Minute Smoke-Test Checklist
+- [ ] Visit `/health` on backend $\rightarrow$ returns `{"status": "ok", "service": "AEGIS-IoT Backend", "version": "2.0.0"}`.
+- [ ] Open frontend workbench in browser $\rightarrow$ loads with `#0D1117` GitHub dark theme and 0 console errors.
+- [ ] Select sample `iot_mqtt_parser` and click **"Run Verification"** $\rightarrow$ all 7 stages execute to `VERIFIED`.
+- [ ] Switch to **"Hardware HIL Console"** tab $\rightarrow$ 16x2 LCD, LEDs, and Serial logs render in Digital Twin Mirror mode.
+- [ ] Click **"Benchmark, Juliet & Competitors"** tab $\rightarrow$ Table A (4 cases) and Table B (5 Juliet cases) load with full telemetry.
 
 ---
 

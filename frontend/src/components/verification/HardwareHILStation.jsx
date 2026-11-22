@@ -1,5 +1,6 @@
 // filepath: frontend/src/components/verification/HardwareHILStation.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { apiUrl } from '../../api/config';
 import {
   Cpu,
   Radio,
@@ -62,7 +63,7 @@ export default function HardwareHILStation({ runState }) {
   // Poll hardware status
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/hardware/status');
+      const res = await fetch(apiUrl('/api/hardware/status'));
       if (res.ok) {
         const data = await res.json();
         setHardwareState(data);
@@ -118,7 +119,7 @@ export default function HardwareHILStation({ runState }) {
   const sendCommand = async (cmd) => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/hardware/command', {
+      const res = await fetch(apiUrl('/api/hardware/command'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: cmd }),
@@ -140,7 +141,7 @@ export default function HardwareHILStation({ runState }) {
   const handleConnect = async () => {
     setIsRefreshingPorts(true);
     try {
-      const res = await fetch('/api/hardware/connect', {
+      const res = await fetch(apiUrl('/api/hardware/connect'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ port: selectedPort || null }),
@@ -158,7 +159,7 @@ export default function HardwareHILStation({ runState }) {
 
   const handleDisconnect = async () => {
     try {
-      const res = await fetch('/api/hardware/disconnect', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/hardware/disconnect'), { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         if (data.status) setHardwareState(data.status);

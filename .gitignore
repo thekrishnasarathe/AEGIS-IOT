@@ -1,11 +1,22 @@
+# =============================================================================
+# AEGIS-IoT .gitignore
+# =============================================================================
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
 # Node / Frontend
 node_modules/
 frontend/node_modules/
 dist/
 frontend/dist/
+build/
+frontend/build/
 .vite/
 
-# Python
+# Python & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,10 +24,17 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Databases & Caches
+*.db
+*.sqlite*
+cache/
+exports/
 
 # Dynamic Run State JSONs (preserve benchmark results)
 backend/runs/run_*.json
@@ -32,4 +50,3 @@ Thumbs.db
 # Antigravity artifacts
 .gemini/
 .system_generated/
-

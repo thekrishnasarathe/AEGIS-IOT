@@ -92,11 +92,21 @@ class HardwareBridge:
         self.auto_connect()
 
     def list_ports(self) -> List[Dict[str, str]]:
-        """Enumerates connected USB/COM serial ports."""
+        """Enumerates connected USB/COM serial ports with 3-second caching."""
+        now = time.time()
+        if hasattr(self, '_cached_ports') and hasattr(self, '_last_ports_time'):
+            if now - self._last_ports_time < 3.0:
+                return self._cached_ports
+
         ports = []
         if SERIAL_AVAILABLE and serial is not None:
             try:
                 for p in serial.tools.list_ports.comports():
+                    # Skip bluetooth virtual ports that block on connect
+                    desc = (p.description or "").lower()
+                    hwid = (p.hwid or "").lower()
+                    if "bluetooth" in desc or "bthenum" in hwid or "bth" in hwid:
+                        continue
                     ports.append({
                         "device": p.device,
                         "description": p.description or "Serial Device",
@@ -112,6 +122,10 @@ class HardwareBridge:
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DEVICEMAP\SERIALCOMM")
                 for i in range(winreg.QueryInfoKey(key)[1]):
                     name, val, _ = winreg.EnumValue(key, i)
+                    name_l = name.lower()
+                    val_l = val.lower()
+                    if "bth" in name_l or "bluetooth" in name_l:
+                        continue
                     if not any(p["device"] == val for p in ports):
                         ports.append({
                             "device": val,
@@ -122,24 +136,26 @@ class HardwareBridge:
             except Exception:
                 pass
 
+        self._cached_ports = ports
+        self._last_ports_time = now
         return ports
 
     def auto_connect(self) -> bool:
-        """Attempts to discover and connect to an Arduino / USB-Serial device."""
+        """Attempts to discover and connect strictly to an Arduino / USB-Serial device."""
         if not SERIAL_AVAILABLE or serial is None:
             return False
 
         ports = self.list_ports()
-        # Sort ports so Arduino / USB Serial devices come first
         keywords = ["arduino", "ch340", "ftdi", "cp210", "usb serial", "usb-serial", "2341:0043", "vid:pid=2341", "com5"]
-        def rank(p):
+
+        # Only attempt connection on devices matching explicit USB/Arduino identifiers
+        candidates = []
+        for p in ports:
             txt = (p.get("description", "") + " " + p.get("hwid", "") + " " + p.get("device", "")).lower()
-            return 0 if any(k in txt for k in keywords) else 1
+            if any(k in txt for k in keywords):
+                candidates.append(p["device"])
 
-        sorted_ports = sorted(ports, key=rank)
-
-        for p in sorted_ports:
-            dev = p["device"]
+        for dev in candidates:
             if self.connect(dev):
                 return True
 

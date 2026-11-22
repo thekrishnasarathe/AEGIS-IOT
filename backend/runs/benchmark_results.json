@@ -1,5 +1,5 @@
 {
-  "timestamp": 1793503630.222426,
+  "timestamp": 1795373627.1213202,
   "title": "AEGIS-IoT Automated Firmware Repair & Verification Benchmark",
   "primary_corpus": [
     {
@@ -18,7 +18,7 @@
       "median_runtime_delta_ms": 0.46,
       "verdict": "VERIFIED",
       "badge": "Verified for tested cases",
-      "elapsed_ms": 3385.39
+      "elapsed_ms": 2965.41
     },
     {
       "sample_id": "iot_coap_option_heap",
@@ -36,7 +36,7 @@
       "median_runtime_delta_ms": 0.18,
       "verdict": "VERIFIED",
       "badge": "Verified for tested cases",
-      "elapsed_ms": 3341.32
+      "elapsed_ms": 3000.35
     },
     {
       "sample_id": "iot_ota_manifest_null",
@@ -54,7 +54,7 @@
       "median_runtime_delta_ms": -0.26,
       "verdict": "VERIFIED",
       "badge": "Verified for tested cases",
-      "elapsed_ms": 3359.46
+      "elapsed_ms": 2963.08
     },
     {
       "sample_id": "iot_adversarial_guard_demo",
@@ -72,7 +72,7 @@
       "median_runtime_delta_ms": 0.0,
       "verdict": "REJECTED",
       "badge": "REJECTED",
-      "elapsed_ms": 2928.18
+      "elapsed_ms": 2564.6
     }
   ],
   "juliet_reduced_evidence": [
@@ -183,7 +183,7 @@
       "median_runtime_delta_ms": 0.46,
       "verdict": "VERIFIED",
       "badge": "Verified for tested cases",
-      "elapsed_ms": 3385.39
+      "elapsed_ms": 2965.41
     },
     {
       "sample_id": "iot_coap_option_heap",
@@ -201,7 +201,7 @@
       "median_runtime_delta_ms": 0.18,
       "verdict": "VERIFIED",
       "badge": "Verified for tested cases",
-      "elapsed_ms": 3341.32
+      "elapsed_ms": 3000.35
     },
     {
       "sample_id": "iot_ota_manifest_null",
@@ -219,7 +219,7 @@
       "median_runtime_delta_ms": -0.26,
       "verdict": "VERIFIED",
       "badge": "Verified for tested cases",
-      "elapsed_ms": 3359.46
+      "elapsed_ms": 2963.08
     },
     {
       "sample_id": "iot_adversarial_guard_demo",
@@ -237,7 +237,7 @@
       "median_runtime_delta_ms": 0.0,
       "verdict": "REJECTED",
       "badge": "REJECTED",
-      "elapsed_ms": 2928.18
+      "elapsed_ms": 2564.6
     }
   ]
 }

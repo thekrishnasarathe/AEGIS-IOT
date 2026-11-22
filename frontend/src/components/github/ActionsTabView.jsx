@@ -1,5 +1,6 @@
 // filepath: frontend/src/components/github/ActionsTabView.jsx
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../../api/config';
 import {
   RotateCw,
   Play,
@@ -153,7 +154,7 @@ export default function ActionsTabView({
   const handleFireAttack = async () => {
     setIsFiringAttack(true);
     try {
-      await fetch('/api/hardware/command', {
+      await fetch(apiUrl('/api/hardware/command'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: 'OVERSIZED_TEST' }),

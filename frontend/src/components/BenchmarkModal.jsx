@@ -1,5 +1,6 @@
 // filepath: frontend/src/components/BenchmarkModal.jsx
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../api/config';
 import { X, BarChart2, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export default function BenchmarkModal({ isOpen, onClose }) {
@@ -8,7 +9,7 @@ export default function BenchmarkModal({ isOpen, onClose }) {
 
   const fetchBenchmark = async () => {
     try {
-      const res = await fetch('/api/bench');
+      const res = await fetch(apiUrl('/api/bench'));
       if (res.ok) {
         const data = await res.json();
         setBenchData(data);
@@ -21,7 +22,7 @@ export default function BenchmarkModal({ isOpen, onClose }) {
   const runBenchmarkSuite = async () => {
     setIsRunning(true);
     try {
-      const res = await fetch('/api/bench/run', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/bench/run'), { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setBenchData(data);
